@@ -4,8 +4,8 @@ const { genMap, blocked, THEME_IDS } = require('./maps');
 // ---- Luật chơi (chỉnh ở đây cho cân bằng) ----
 // chiều cao từng con (để bắn trúng giữa thân); bộ thú mỗi bản đồ nằm ở maps.js
 const KIND_H = [30, 40, 32, 32, 28, 36, 36, 34, 24, 30, 48, 22, 22, 30, 52, 28];
-const HIDE_T = 15;          // giây cho người trốn đi ẩn
-const ROUND_T = 180;        // giây mỗi ván
+const HIDE_T = +process.env.HS_HIDE_T || 15;   // giây cho người trốn đi ẩn
+const ROUND_T = +process.env.HS_ROUND_T || 180; // giây mỗi ván (HS_ROUND_T để test nhanh)
 const NPC_SPD = 55;         // tốc độ thú đi dạo
 const WALK = 55;            // người trốn đi bộ = y hệt thú
 const RUN = 160;            // chạy nhanh: để lại dấu chân!
@@ -17,7 +17,8 @@ const NPC_PENALTY = 15;     // bắn nhầm thú mất máu
 const CATCH_BONUS = 20;     // bắt được người hồi máu
 const SAY_CD = 8, SAY_BONUS = 3;          // Kêu: trừ 3s đồng hồ
 const SLEEP_T = 5, SLEEP_CD = 25;         // Giả ngủ: bắn trúng cũng như bắn nhầm thú
-const DECOY_CD = 15, DECOY_MAX = 2, DECOY_RUN = 3; // Mồi nhử: thả 1 con thú giả chạy đi
+const DECOY_CD = 20, DECOY_RUN = 3;     // Phân thân: thả 1 con thú giả chạy đi, không giới hạn, hồi 20s
+const FRENZY_T = 5, FRENZY_CD = 0.15, FRENZY_SPD = 1.6; // Giờ G: 5s cuối người tìm bắn liên tục, không mất máu, chạy nhanh
 const LISTEN_CD = 25;                     // Nghe ngóng (người tìm): biết người trốn gần hay xa
 const FOOTPRINT_LIFE = 5;
 const ROUND_PAUSE = 7, FINAL_PAUSE = 10;
@@ -95,7 +96,7 @@ class HideSeek {
     gs.forEach((g, i) => {
       Object.assign(g, {
         role: i < nSeek ? 'seeker' : 'hider', alive: true, hp: 100, input: {}, ang: 0, flip: 0, dx: 0, dy: 0, moving: false,
-        cool: 0, sayCd: 0, sleepCd: 0, sleep: 0, decoyCd: 0, decoys: DECOY_MAX, listenCd: 0, surv: 0, catchPts: 0, pts: 0,
+        cool: 0, sayCd: 0, sleepCd: 0, sleep: 0, decoyCd: 0, listenCd: 0, surv: 0, catchPts: 0, pts: 0,
       });
       if (g.role === 'seeker') { g.seeks++; g.x = m.spawn.x + (i - (nSeek - 1) / 2) * 50; g.y = m.spawn.y; }
       else { Object.assign(g, spot(m, m.spawn)); g.skin = pick(m.kinds); g.eid = eids.pop(); }
@@ -133,7 +134,7 @@ class HideSeek {
         break;
       case 'shoot': if (live) this.shoot(g, +d.x, +d.y); break;
       case 'skin':
-        if (live && !playing && g.role === 'hider') { const ks = this.map.kinds; g.skin = ks[(ks.indexOf(g.skin) + 1) % ks.length]; }
+        if (live && g.role === 'hider') { const ks = this.map.kinds; g.skin = ks[(ks.indexOf(g.skin) + 1) % ks.length]; }
         break;
       case 'say':
         if (live && playing && g.role === 'hider' && g.sayCd <= 0) {
@@ -146,8 +147,7 @@ class HideSeek {
         if (live && g.role === 'hider' && g.sleepCd <= 0 && g.sleep <= 0) { g.sleep = SLEEP_T; g.sleepCd = SLEEP_CD; g.moving = false; }
         break;
       case 'decoy':
-        if (live && g.role === 'hider' && g.decoyCd <= 0 && g.decoys > 0) {
-          g.decoys--;
+        if (live && g.role === 'hider' && g.decoyCd <= 0) {
           g.decoyCd = DECOY_CD;
           let dx = g.dx, dy = g.dy;
           if (!dx && !dy) { const a = Math.random() * Math.PI * 2; dx = Math.cos(a); dy = Math.sin(a); }
@@ -168,7 +168,8 @@ class HideSeek {
 
   shoot(g, tx, ty) {
     if (this.phase !== 'playing' || g.role !== 'seeker' || g.cool > 0 || !isFinite(tx) || !isFinite(ty)) return;
-    g.cool = SHOT_CD;
+    const frenzy = this.frenzy();
+    g.cool = frenzy ? FRENZY_CD : SHOT_CD;
     const sx = g.x, sy = g.y - 24;
     let dx = tx - sx, dy = ty - sy;
     const d = Math.hypot(dx, dy) || 1, len = Math.min(d, RANGE);
@@ -187,7 +188,7 @@ class HideSeek {
       fx.x2 = best.o.x | 0; fx.y2 = (best.o.y - KIND_H[best.o.skin] * .5) | 0;
       if (best.npc || best.o.sleep > 0) {          // người đang giả ngủ: bị tính như bắn nhầm thú
         if (best.npc) { best.o.stun = 1.4; best.o.sleep = 0; best.o.run = 0; }
-        g.hp -= NPC_PENALTY;
+        if (frenzy) fx.free = 1; else g.hp -= NPC_PENALTY;
         fx.hit = 1;
         if (g.hp <= 0) { g.hp = 0; g.alive = false; }
       } else {
@@ -201,6 +202,8 @@ class HideSeek {
     if (!g.alive) this.api.bcast({ t: 'fx', kind: 'down', name: g.name });
     this.checkWin();
   }
+
+  frenzy() { return this.phase === 'playing' && this.time <= FRENZY_T; }
 
   footprint(o, dx, dy, dt) {
     o.fpT = (o.fpT || 0) - dt;
@@ -256,7 +259,7 @@ class HideSeek {
       if (l < .15) { g.moving = false; continue; }
       if (l > 1) { mx /= l; my /= l; }
       const running = g.role === 'hider' && g.input.run;
-      const sp = g.role === 'seeker' ? SEEK_SPD : running ? RUN : WALK;
+      const sp = g.role === 'seeker' ? SEEK_SPD * (this.frenzy() ? FRENZY_SPD : 1) : running ? RUN : WALK;
       const nx = clamp(g.x + mx * sp * dt, 60, m.W - 60), ny = clamp(g.y + my * sp * dt, 90, m.H - 40);
       if (!blocked(m, nx, g.y)) g.x = nx;
       if (!blocked(m, g.x, ny)) g.y = ny;
@@ -282,7 +285,7 @@ class HideSeek {
     ].sort((a, b) => a[2] - b[2]);
     const k = all.filter(g => g.role === 'seeker').map(g => [g.id, g.name, g.x | 0, g.y | 0, g.hp, +g.ang.toFixed(2), g.alive ? 1 : 0]);
     const fp = this.fp.map(f => [f.x | 0, f.y | 0, +f.a.toFixed(1), +(this.clock - f.t).toFixed(1)]);
-    const base = { t: 's', ph: this.phase, tm: ceil0(this.time), e, k, fp, hl: hiders.length, ht: all.filter(g => g.role === 'hider').length };
+    const base = { t: 's', ph: this.phase, tm: ceil0(this.time), e, k, fp, hl: hiders.length, fz: this.frenzy() ? 1 : 0, ht: all.filter(g => g.role === 'hider').length };
     const mates = hiders.map(g => [g.eid, g.name]);
     for (const p of this.api.players()) {
       if (!p.ws) continue;
@@ -291,7 +294,7 @@ class HideSeek {
       const msg = {
         ...base,
         me: {
-          role: g.role, alive: g.alive, hp: g.hp, eid: g.eid, skin: g.skin, sleep: g.sleep > 0 ? 1 : 0, decoys: g.decoys,
+          role: g.role, alive: g.alive, hp: g.hp, eid: g.eid, skin: g.skin, sleep: g.sleep > 0 ? 1 : 0,
           cd: { say: ceil0(g.sayCd), sleep: ceil0(g.sleepCd), decoy: ceil0(g.decoyCd), listen: ceil0(g.listenCd) },
         },
       };

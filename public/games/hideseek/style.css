@@ -82,3 +82,7 @@
   .hs.touch .hs-mini{top:calc(56px + var(--sat));width:100px!important}
   .hs.touch .hs-keys{display:none}
 }
+
+/* Giờ G: 5 giây cuối */
+.hs.frenzy::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 6px #ff5d7d,inset 0 0 60px rgba(255,93,125,.55);animation:frenzy .5s ease-in-out infinite alternate}
+@keyframes frenzy{from{opacity:.45}to{opacity:1}}

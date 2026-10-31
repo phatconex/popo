@@ -38,8 +38,11 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
   - Làng tuyết: chim cánh cụt, gấu trắng, hải cẩu, cáo tuyết, tuần lộc
   - Bãi biển: cua, rùa biển, hải âu, hồng hạc, rái cá
 - Nhiều ván, đổi vai sau mỗi ván, cộng điểm, có bảng xếp hạng chung cuộc.
-- Người trốn: Chạy (để lại dấu chân), Kêu (−3 giây), Giả ngủ (bị bắn cũng như bắn nhầm thú), Mồi nhử (thả thú giả chạy đi), Đổi thú (lúc đang trốn).
+- Người trốn: Chạy (để lại dấu chân), Kêu (−3 giây), Giả ngủ (bị bắn cũng như bắn nhầm thú),
+  Phân thân (thả thú giả chạy đi — không giới hạn, hồi 20 giây), Đổi thú (bất cứ lúc nào).
 - Người tìm: súng nước, Nghe ngóng (biết người trốn gần hay xa).
+- **Giờ G — 5 giây cuối ván:** người tìm giữ chuột/giữ tay để bắn liên tục, bắn nhầm không mất máu, chạy nhanh hơn.
+- Test nhanh: `HS_ROUND_T=30 HS_HIDE_T=3 npm start` để rút ngắn thời gian ván.
 - Máy tính: WASD + chuột, phím Q/E/F/R. Điện thoại: kéo nửa trái để đi, chạm nửa phải để bắn, nút kỹ năng.
 
 ## Cấu trúc

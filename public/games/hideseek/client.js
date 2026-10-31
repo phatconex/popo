@@ -1,6 +1,6 @@
 // Trốn Tìm Nông Trại — client. Đăng ký với lõi bằng registerGame().
 (() => {
-  const CD_MAX = { say: 8, sleep: 25, decoy: 15, listen: 25 };
+  const CD_MAX = { say: 8, sleep: 25, decoy: 20, listen: 25 };
   const SENSE = [['Xa lắm…', '#7b9cff'], ['Ở gần đây!', '#ff9f43'], ['Rất gần!!', '#ff5d7d']];
   const svg = d => `<svg viewBox="0 0 24 24" class="i">${d}</svg>`;
   const ICON = {
@@ -14,10 +14,10 @@
   const ACTIONS = {
     hider: [
       { id: 'run', label: 'Chạy', key: 'Shift', hold: true, touchOnly: true },
-      { id: 'swap', label: 'Đổi thú', key: 'Q', msg: 'skin', phase: 'hiding' },
+      { id: 'swap', label: 'Đổi thú', key: 'Q', msg: 'skin' },
       { id: 'say', label: 'Kêu −3s', key: 'E', msg: 'say', cd: 'say', phase: 'playing' },
       { id: 'sleep', label: 'Giả ngủ', key: 'F', msg: 'sleep', cd: 'sleep' },
-      { id: 'decoy', label: 'Mồi nhử', key: 'R', msg: 'decoy', cd: 'decoy', count: 'decoys' },
+      { id: 'decoy', label: 'Phân thân', key: 'R', msg: 'decoy', cd: 'decoy' },
     ],
     seeker: [{ id: 'listen', label: 'Nghe ngóng', key: 'F', msg: 'listen', cd: 'listen', phase: 'playing' }],
   };
@@ -27,7 +27,7 @@
   let snap, map, gfx, role, roundInfo, raf, inputTimer, senseTimer;
   let disp, fx, floats, bubbles, rings;
   let cam, vw, vh, Z, dpr;
-  let mouse, aim, keys, joy, touchRun, lastInputJson, actKey, hudKey, lastTm, roundTimer;
+  let mouse, aim, keys, joy, touchRun, firing, frenzy, fireT, lastInputJson, actKey, hudKey, lastTm, roundTimer;
   const listeners = [];
   const on = (t, ev, fn, o) => { t.addEventListener(ev, fn, o); listeners.push([t, ev, fn, o]); };
 
@@ -71,7 +71,7 @@
     snap = map = gfx = role = roundInfo = null;
     disp = new Map(); fx = []; floats = []; bubbles = []; rings = [];
     cam = { x: 0, y: 0 }; mouse = { x: 0, y: 0 }; aim = null;
-    keys = { l: 0, r: 0, u: 0, d: 0, run: 0 }; joy = null; touchRun = 0; lastInputJson = ''; actKey = hudKey = ''; lastTm = -1;
+    keys = { l: 0, r: 0, u: 0, d: 0, run: 0 }; joy = null; touchRun = 0; firing = null; frenzy = 0; fireT = 0; lastInputJson = ''; actKey = hudKey = ''; lastTm = -1;
 
     on(window, 'resize', resize);
     on(window, 'keydown', onKey);
@@ -82,7 +82,12 @@
     on(cv, 'pointerup', onUp);
     on(cv, 'pointercancel', onUp);
     on(cv, 'contextmenu', e => e.preventDefault());
-    inputTimer = setInterval(() => pushInput(role === 'seeker'), 80);
+    inputTimer = setInterval(() => {
+      pushInput(role === 'seeker');
+      // Giờ G: giữ chuột / giữ tay là bắn liên tục
+      if (firing && frenzy && role === 'seeker' && snap && snap.me.alive) shootAt(firing.x, firing.y);
+    }, 80);
+    on(window, 'pointerup', e => { if (firing && (firing.id === e.pointerId || e.pointerType === 'mouse')) firing = null; });
     resize();
     raf = requestAnimationFrame(frame);
   }
@@ -97,6 +102,7 @@
   function onMsg(d) {
     switch (d.t) {
       case 'init':
+        endFrenzy();
         role = d.role; map = d.map; gfx = HSThemes.build(map);
         roundInfo = { round: d.round, total: d.total };
         snap = null; disp.clear(); fx = []; floats = []; bubbles = []; rings = []; aim = null;
@@ -113,11 +119,9 @@
         break;
       case 's': onSnap(d); break;
       case 'fx': onFx(d); break;
-      case 'round': showRound(d); break;
+      case 'round': endFrenzy(); showRound(d); break;
       case 'sense': {
-        const [txt, col] = SENSE[d.level];
-        el.sense.textContent = txt; el.sense.style.background = col; el.sense.classList.add('on');
-        clearTimeout(senseTimer); senseTimer = setTimeout(() => el.sense.classList.remove('on'), 2200);
+        banner(...SENSE[d.level], 2200);
         A.vibrate(d.level === 2 ? [80, 60, 80] : 40);
         A.beep([300, 500, 800][d.level], .25, 'sine', .12, 200);
         break;
@@ -157,6 +161,12 @@
     if (el.pips.innerHTML !== pips) el.pips.innerHTML = pips;
     if (m.ph === 'hiding' && m.tm !== lastTm && m.tm <= 5) A.beep(1200, .04, 'sine', .05);
     lastTm = m.tm;
+    if (m.fz && !frenzy) {
+      banner(role === 'seeker' ? 'GIỜ G! Bắn thả ga!' : 'GIỜ G! Trốn cho kỹ!', '#ff5d7d', 2600);
+      A.vibrate([100, 60, 100]); A.beep(500, .4, 'square', .08, 500);
+    }
+    frenzy = m.fz;
+    root.querySelector('.hs').classList.toggle('frenzy', !!m.fz);
     updateActions(m);
   }
 
@@ -168,8 +178,10 @@
       if (m.hit === 1) {
         bubbles.push({ x: m.x2, y: m.y2 - 30, txt: 'Oan quá!', life: 1.4, angry: true });
         const s = snap && snap.k.find(k => k[0] === m.by);
-        if (s) floats.push({ x: s[2], y: s[3] - 80, txt: '-15', heart: true, col: '#ff5d7d', life: 1.3 });
-        if (m.by === A.myId) { A.sfx.lose(); A.vibrate([40, 40, 40]); }
+        if (!m.free) {
+          if (s) floats.push({ x: s[2], y: s[3] - 80, txt: '-15', heart: true, col: '#ff5d7d', life: 1.3 });
+          if (m.by === A.myId) { A.sfx.lose(); A.vibrate([40, 40, 40]); }
+        }
       } else if (m.hit === 2) {
         floats.push({ x: m.x2, y: m.y2 - 20, txt: 'Bắt được!', stars: true, col: '#ff8fb1', life: 1.6 });
         feed(`<b>${A.esc(m.seeker)}</b>&nbsp;bắt được&nbsp;<b>${A.esc(m.name)}</b>!`, m.skin);
@@ -187,6 +199,11 @@
     }
   }
 
+  function endFrenzy() { frenzy = 0; firing = null; root.querySelector('.hs').classList.remove('frenzy'); }
+  function banner(txt, col, ms) {
+    el.sense.textContent = txt; el.sense.style.background = col; el.sense.classList.add('on');
+    clearTimeout(senseTimer); senseTimer = setTimeout(() => el.sense.classList.remove('on'), ms);
+  }
   function feed(html, av) {
     const d = document.createElement('div');
     if (av != null) d.append(avatar(av, 26)); else d.className = 'np';
@@ -265,9 +282,7 @@
       const cd = a.cd ? me.cd[a.cd] : 0;
       a.el.style.setProperty('--p', a.cd ? cd / CD_MAX[a.cd] : 0);
       a.el.querySelector('.cdt').textContent = cd ? cd : '';
-      const cnt = a.count ? me[a.count] : null;
-      a.el.querySelector('.cnt').textContent = cnt != null ? cnt : '';
-      a.el.classList.toggle('off', cd > 0 || cnt === 0 || (a.id === 'sleep' && me.sleep));
+            a.el.classList.toggle('off', cd > 0 || (a.id === 'sleep' && me.sleep));
       a.el.classList.toggle('active', a.id === 'sleep' && !!me.sleep);
     }
   }
@@ -293,20 +308,24 @@
     e.preventDefault();
     if (e.pointerType === 'mouse') {
       mouse.x = e.clientX; mouse.y = e.clientY;
-      if (role === 'seeker' && e.button === 0) shootAt(e.clientX, e.clientY);
+      if (role === 'seeker' && e.button === 0) { firing = { id: e.pointerId, x: e.clientX, y: e.clientY }; shootAt(e.clientX, e.clientY); }
       return;
     }
     if (!joy && e.clientX < vw * .5) {
       joy = { id: e.pointerId, bx: e.clientX, by: e.clientY, x: e.clientX, y: e.clientY };
       try { cv.setPointerCapture(e.pointerId); } catch {}
       pushInput();
-    } else if (role === 'seeker') shootAt(e.clientX, e.clientY);
+    } else if (role === 'seeker') { firing = { id: e.pointerId, x: e.clientX, y: e.clientY }; shootAt(e.clientX, e.clientY); }
   }
   function onMove(e) {
+    if (firing && (firing.id === e.pointerId || e.pointerType === 'mouse')) { firing.x = e.clientX; firing.y = e.clientY; }
     if (e.pointerType === 'mouse') { mouse.x = e.clientX; mouse.y = e.clientY; return; }
     if (joy && e.pointerId === joy.id) { joy.x = e.clientX; joy.y = e.clientY; }
   }
-  function onUp(e) { if (joy && e.pointerId === joy.id) { joy = null; pushInput(); } }
+  function onUp(e) {
+    if (firing && firing.id === e.pointerId) firing = null;
+    if (joy && e.pointerId === joy.id) { joy = null; pushInput(); }
+  }
   function shootAt(sx, sy) {
     const w = screenToWorld(sx, sy);
     aim = w;
