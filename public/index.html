@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#9ddf8f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Góc Rảnh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="core/style.css">
+<link rel="stylesheet" href="games/hideseek/style.css">
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+
+<!-- TRANG CHỦ -->
+<div id="home" class="screen on">
+  <div class="home-wrap">
+    <div class="card hero">
+      <div class="brand"><span id="logoAv"></span><div><h1>Góc Rảnh</h1><p>Game nhỏ cho bạn bè &amp; cặp đôi</p></div></div>
+      <label for="name">Tên của bạn</label>
+      <input id="name" maxlength="14" placeholder="VD: Heo Mập" autocomplete="off">
+      <label>Chọn nhân vật</label>
+      <div class="avpick" id="avPick"></div>
+      <div class="row"><button class="btn" id="btnCreate"><svg class="i"><use href="#i-plus"/></svg>Tạo phòng mới</button></div>
+      <div class="divider">hoặc vào phòng bạn bè</div>
+      <div class="row tight">
+        <input id="code" maxlength="4" placeholder="Mã 4 chữ" class="codein" autocomplete="off" autocapitalize="characters">
+        <button class="btn mint shrink" id="btnJoin"><svg class="i"><use href="#i-door"/></svg>Vào</button>
+      </div>
+      <div class="err" id="err"></div>
+    </div>
+    <div class="catalog">
+      <h2>Trò chơi</h2>
+      <div class="games" id="homeGames"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PHÒNG CHỜ -->
+<div id="lobby" class="screen">
+  <div class="card lobby">
+    <div class="lobby-top">
+      <button class="iconbtn" id="btnLeave" title="Rời phòng"><svg class="i"><use href="#i-back"/></svg></button>
+      <div class="codebox"><small>Mã phòng</small><div class="code" id="lcode">----</div></div>
+      <button class="iconbtn" id="btnCopy" title="Copy link mời"><svg class="i"><use href="#i-link"/></svg></button>
+    </div>
+    <div class="players" id="lplayers"></div>
+    <h3 class="sec">Trò chơi</h3>
+    <div class="gamepick" id="gamePick"></div>
+    <div id="settings"></div>
+    <button class="btn sun big" id="btnStart"><svg class="i f"><use href="#i-play"/></svg>Bắt đầu chơi!</button>
+    <div class="sub" id="lwait">Đang đợi chủ phòng bắt đầu…</div>
+    <div class="err" id="lerr"></div>
+  </div>
+</div>
+
+<!-- GAME (module game tự dựng giao diện bên trong) -->
+<div id="gameRoot"></div>
+
+<div id="reconnect" class="overlay"><div class="card mini"><div class="spinner"></div><b>Mất kết nối, đang thử lại…</b><span id="reconnTxt"></span></div></div>
+
+<button id="emoteBtn" class="emote-btn hidden" title="Biểu cảm"><svg class="em"><use href="#e-1"/></svg></button>
+<div id="emotePanel" class="emote-panel"></div>
+<div id="reactions"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-door" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5" ry="4.2"/><circle cx="5.5" cy="10.5" r="2.3"/><circle cx="18.5" cy="10.5" r="2.3"/><circle cx="9" cy="6" r="2.3"/><circle cx="15" cy="6" r="2.3"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4a3 3 0 0 0 4 4M16 6h4a3 3 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0M12 19h.01M3 3l18 18"/></symbol>
+
+  <!-- 8 biểu cảm (vẽ tay bằng SVG) -->
+  <symbol id="e-0" viewBox="0 0 48 48"><path d="M24 41S7 30.5 7 18.5A9 9 0 0 1 24 13a9 9 0 0 1 17 5.5C41 30.5 24 41 24 41z" fill="#ff6b8b" stroke="#4a3b52" stroke-width="3" stroke-linejoin="round"/><ellipse cx="15" cy="18" rx="3" ry="2" fill="#fff" opacity=".7"/></symbol>
+  <symbol id="e-1" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="#ffd36e" stroke="#4a3b52" stroke-width="3"/><path d="M14 20q3-4 6 0M28 20q3-4 6 0" fill="none" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/><path d="M14 27h20a10 10 0 0 1-20 0z" fill="#e46a92" stroke="#4a3b52" stroke-width="3" stroke-linejoin="round"/><circle cx="12" cy="25" r="2.5" fill="#ff9fb5"/><circle cx="36" cy="25" r="2.5" fill="#ff9fb5"/></symbol>
+  <symbol id="e-2" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="#ffd36e" stroke="#4a3b52" stroke-width="3"/><path d="M17 24s-5-3-5-6a2.6 2.6 0 0 1 5-1 2.6 2.6 0 0 1 5 1c0 3-5 6-5 6zM31 24s-5-3-5-6a2.6 2.6 0 0 1 5-1 2.6 2.6 0 0 1 5 1c0 3-5 6-5 6z" fill="#ff6b8b" stroke="#4a3b52" stroke-width="2" stroke-linejoin="round"/><path d="M18 30q6 6 12 0" fill="none" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/></symbol>
+  <symbol id="e-3" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="#ffd36e" stroke="#4a3b52" stroke-width="3"/><circle cx="17" cy="19" r="3.2" fill="#4a3b52"/><circle cx="31" cy="19" r="3.2" fill="#4a3b52"/><path d="M14 13l5-2M34 13l-5-2" stroke="#4a3b52" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="24" cy="31" rx="4.5" ry="6" fill="#e46a92" stroke="#4a3b52" stroke-width="3"/></symbol>
+  <symbol id="e-4" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="#ffd36e" stroke="#4a3b52" stroke-width="3"/><path d="M13 19q4 3 7 0M28 19q4 3 7 0" fill="none" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/><path d="M15 22v14M33 22v14" stroke="#7cc7ff" stroke-width="4.5" stroke-linecap="round"/><path d="M19 34q5-5 10 0" fill="none" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/></symbol>
+  <symbol id="e-5" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="#ff9b8b" stroke="#4a3b52" stroke-width="3"/><path d="M13 16l8 4M35 16l-8 4" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/><circle cx="18" cy="23" r="2.6" fill="#4a3b52"/><circle cx="30" cy="23" r="2.6" fill="#4a3b52"/><path d="M17 34q7-6 14 0" fill="none" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/><path d="M36 8l2 4M40 11l-4 1" stroke="#ff6b6b" stroke-width="2.5" stroke-linecap="round"/></symbol>
+  <symbol id="e-6" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="#ffd36e" stroke="#4a3b52" stroke-width="3"/><path d="M9 18h30M11 18q0 7 6 7t6-7M25 18q0 7 6 7t6-7" fill="#4a3b52" stroke="#4a3b52" stroke-width="3" stroke-linejoin="round"/><path d="M14 20l3-1" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M19 32q6 4 11-1" fill="none" stroke="#4a3b52" stroke-width="3" stroke-linecap="round"/></symbol>
+  <symbol id="e-7" viewBox="0 0 48 48"><path d="M8 10h32a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H22l-8 7v-7H8a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4z" fill="#8f7bff" stroke="#4a3b52" stroke-width="3" stroke-linejoin="round"/><text x="24" y="28.5" text-anchor="middle" font-family="Baloo 2,sans-serif" font-weight="800" font-size="15" fill="#fff">GG</text></symbol>
+</svg>
+
+<script src="core/art.js"></script>
+<script src="core/core.js"></script>
+<script src="games/hideseek/themes.js"></script>
+<script src="games/hideseek/client.js"></script>
+</body>
+</html>
