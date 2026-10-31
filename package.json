@@ -1,7 +1,7 @@
 {
-  "name": "goc-ranh",
+  "name": "popo",
   "version": "2.0.0",
-  "description": "Góc Rảnh — web game nhỏ cho bạn bè và cặp đôi chơi từ xa",
+  "description": "Popo — web game nhỏ cho bạn bè và cặp đôi chơi từ xa",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js"

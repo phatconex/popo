@@ -1,4 +1,4 @@
-# popo — Góc Rảnh
+# Popo
 
 Web game nhỏ cho bạn bè và cặp đôi chơi từ xa, chơi được trên cả máy tính và điện thoại.
 Toàn bộ đồ họa vẽ bằng canvas/SVG (không dùng emoji hay file ảnh).

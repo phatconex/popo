@@ -1,4 +1,4 @@
-// Góc Rảnh — client lõi: trang chủ, phòng chờ, kết nối (tự vào lại khi rớt mạng), biểu cảm.
+// Popo — client lõi: trang chủ, phòng chờ, kết nối (tự vào lại khi rớt mạng), biểu cảm.
 //
 // Mỗi game đăng ký bằng registerGame(id, module), module gồm:
 //   thumb(ctx, w, h, t)   — (tuỳ chọn) vẽ ảnh bìa trên thẻ game
@@ -248,7 +248,7 @@ $('btnLeave').onclick = () => { sfx.click(); sendMsg({ t: 'leave' }); sess = nul
 $('btnCopy').onclick = async () => {
   const link = `${location.origin}/?room=${lobby.code}`;
   try {
-    if (navigator.share && isTouch) await navigator.share({ title: 'Góc Rảnh', text: `Vào chơi với mình! Mã phòng ${lobby.code}`, url: link });
+    if (navigator.share && isTouch) await navigator.share({ title: 'Popo', text: `Vào chơi với mình! Mã phòng ${lobby.code}`, url: link });
     else { await navigator.clipboard.writeText(link); $('lerr').textContent = 'Đã copy link mời!'; $('lerr').classList.add('ok'); }
   } catch {}
 };
