@@ -207,7 +207,7 @@ function renderCatalog() {
     const cvs = gameThumb(g.id, 240, 96); if (cvs) th.append(cvs);
     th.insertAdjacentHTML('beforeend', `<span class="tag">${esc(g.tag || '')}</span>`);
     b.append(th);
-    b.insertAdjacentHTML('beforeend', `<div class="meta"><b>${esc(g.name)}</b><small>${esc(g.desc)} · ${g.min}–${g.max} người</small></div>`);
+    b.insertAdjacentHTML('beforeend', `<div class="meta"><b>${esc(g.name)}</b><small>${esc(g.desc)} · ${g.min === g.max ? g.min : g.min + '–' + g.max} người</small></div>`);
     b.onclick = () => createRoom(g.id);
     box.append(b);
   }
@@ -343,7 +343,7 @@ function homeFrame(t) {
   requestAnimationFrame(homeFrame);
   const dt = Math.min(.05, (t - lastT) / 1000), sec = t / 1000; lastT = t;
   for (const th of thumbs) if (th.c.isConnected) { th.x.clearRect(0, 0, th.w, th.h); th.mod.thumb(th.x, th.w, th.h, sec); }
-  if (current) return;
+  if (current || !homeDecor.width || !homeDecor.height) return;
   bctx.drawImage(homeDecor, 0, 0, vw, vh);
   for (const a of homeAnimals) {
     if (a.wait > 0) { a.wait -= dt; a.mv = false; continue; }

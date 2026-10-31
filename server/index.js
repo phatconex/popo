@@ -9,6 +9,7 @@ const Core = require('./core');
 // Thêm game mới: tạo thư mục server/games/<id> rồi đăng ký ở đây.
 const GAMES = {
   hideseek: require('./games/hideseek'),
+  drive: require('./games/drive'),
 };
 
 const PORT = process.env.PORT || 3000;

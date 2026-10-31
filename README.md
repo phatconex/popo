@@ -45,14 +45,27 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 - Test nhanh: `HS_ROUND_T=30 HS_HIDE_T=3 npm start` để rút ngắn thời gian ván.
 - Máy tính: WASD + chuột, phím Q/E/F/R. Điện thoại: kéo nửa trái để đi, chạm nửa phải để bắn, nút kỹ năng.
 
+## Trò chơi: Lái Mò (2 người)
+- Một người cầm lái nhưng kính mờ, không thấy đường. Người kia thấy bản đồ từ trên cao và chỉ đường
+  bằng 8 nút tín hiệu: Trái, Phải, Thẳng, Ga, Chậm, Phanh, Lùi, Đỗ (hoặc nói qua cuộc gọi).
+- Đón các bé thú ở trạm (dừng sát trạm cho khách lên), tránh vật cản, vũng trơn, thú băng qua đường, về đích trước khi hết giờ.
+- Tài xế có đồng hồ tốc độ và "đèn va chạm" kêu tít tít khi sắp đâm; xe rung khi chạy ra cỏ.
+- Hết mỗi màn đổi vai. Đường sinh ngẫu nhiên, càng về sau càng dài và khó.
+- 4 bản đồ: Đồng quê, Đèo tuyết (đường băng rất trơn), Phố biển, Phố đêm.
+- Tuỳ chọn: số màn, tín hiệu trễ 0,5–1 giây (khó hơn: phải chỉ trước).
+- Máy tính: tài xế A/D lái, W ga, S hoặc Space phanh/lùi; hoa tiêu bấm phím ghi trên nút, T xoay bản đồ.
+  Điện thoại: nút lái và nút tín hiệu trên màn hình.
+
 ## Cấu trúc
 ```
 server/index.js            web server + đăng ký game
 public/config.js           địa chỉ máy chủ game (để trống nếu chạy chung)
 server/core.js             phòng, vào lại khi rớt mạng, biểu cảm, cài đặt
 server/games/hideseek/     luật chơi (index.js) + sinh bản đồ (maps.js)
+server/games/drive/        Lái Mò: luật chơi (index.js) + sinh đường (track.js)
 public/core/               trang chủ, phòng chờ, kết nối, biểu cảm, hình nhân vật dùng chung
 public/games/hideseek/     giao diện game, vẽ bản đồ (themes.js), CSS
+public/games/drive/        giao diện Lái Mò (hoa tiêu + tài xế), CSS
 ```
 
 ## Thêm một game mới
