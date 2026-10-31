@@ -69,17 +69,29 @@ function show(id) {
 }
 
 // ================== MẠNG ==================
-let reconnTimer = null, reconnUntil = 0;
+// Máy chủ game: mặc định cùng địa chỉ với trang web. Nếu trang web tĩnh nằm chỗ khác
+// (vd. Vercel) thì đặt window.POPO_SERVER trong public/config.js trỏ tới máy chủ Node.
+const SERVER_URL = (() => {
+  const s = String(window.POPO_SERVER || '').trim().replace(/\/+$/, '');
+  if (s) return s.replace(/^http/, 'ws');
+  return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+})();
+let reconnTimer = null, reconnUntil = 0, homeRetry = null;
 function connect(onOpen) {
   if (ws && ws.readyState === 1) return onOpen();
   if (ws && ws.readyState === 0) { ws.addEventListener('open', onOpen, { once: true }); return; }
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = onOpen;
-  ws.onmessage = e => onMsg(JSON.parse(e.data));
-  ws.onclose = () => {
+  const sock = ws = new WebSocket(SERVER_URL);
+  sock.onopen = () => { sock.opened = true; clearTimeout(homeRetry); onOpen(); };
+  sock.onmessage = e => onMsg(JSON.parse(e.data));
+  sock.onclose = () => {
+    if (ws !== sock) return;
     ws = null;
-    if (sess) startReconnect();
-    else if (!$('home').classList.contains('on')) { unmountGame(); show('home'); $('err').textContent = 'Mất kết nối với server!'; }
+    if (sess) return startReconnect();
+    if (!$('home').classList.contains('on')) { unmountGame(); show('home'); $('err').textContent = 'Mất kết nối với máy chủ game!'; }
+    else if (!sock.opened) $('err').textContent = 'Chưa kết nối được máy chủ game, đang thử lại…';
+    // ở trang chủ: tự thử lại để lấy danh sách game (máy chủ miễn phí có thể mất ~30s để thức dậy)
+    clearTimeout(homeRetry);
+    homeRetry = setTimeout(() => { if (!ws && !sess) connect(() => {}); }, 3000);
   };
 }
 const sendMsg = o => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
@@ -103,7 +115,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && se
 
 function onMsg(m) {
   switch (m.t) {
-    case 'welcome': catalog = m.games; renderCatalog(); break;
+    case 'welcome':
+      catalog = m.games; renderCatalog();
+      if (/máy chủ game/.test($('err').textContent)) $('err').textContent = '';
+      break;
     case 'joined':
       myId = m.id; sess = { code: m.code, token: m.token }; tabStore.set('sess', sess);
       stopReconnect();
@@ -166,8 +181,9 @@ $('btnJoin').onclick = () => {
   if (c.length !== 4) return $('err').textContent = 'Mã phòng có 4 chữ nha!';
   connect(() => sendMsg({ t: 'join', name: myName(), av: myAv, code: c }));
 };
-$('code').onkeydown = e => e.key === 'Enter' && $('btnJoin').click();
-$('name').onkeydown = e => e.key === 'Enter' && ($('code').value.trim() ? $('btnJoin') : $('btnCreate')).click();
+// lưu ý: không dùng `onkeydown = e => cond && ...` — trả về false sẽ chặn luôn phím (Backspace…)
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnJoin').click(); });
+$('name').addEventListener('keydown', e => { if (e.key === 'Enter') ($('code').value.trim() ? $('btnJoin') : $('btnCreate')).click(); });
 const qs = new URLSearchParams(location.search).get('room');
 if (qs) { $('code').value = qs.toUpperCase(); history.replaceState(null, '', location.pathname); }
 
@@ -184,6 +200,7 @@ function gameThumb(id, w, h) {
 function renderCatalog() {
   thumbs.length = 0;
   const box = $('homeGames'); box.innerHTML = '';
+  if (!catalog.length) box.innerHTML = '<div class="gcard soon"><div class="thumb"><div class="spinner"></div></div><div class="meta"><b>Đang kết nối máy chủ…</b><small>Danh sách game sẽ hiện khi kết nối xong</small></div></div>';
   for (const g of catalog) {
     const b = document.createElement('button'); b.className = 'gcard';
     const th = document.createElement('div'); th.className = 'thumb';
@@ -344,6 +361,7 @@ function homeFrame(t) {
 requestAnimationFrame(homeFrame);
 
 // kết nối sẵn để lấy danh sách game; nếu đang có phiên cũ thì vào lại phòng
+renderCatalog();
 addEventListener('load', () => {
   if (sess) startReconnect(true);
   else connect(() => {});

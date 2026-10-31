@@ -1,0 +1,9 @@
+# Deploy lên Render: Dashboard → New → Blueprint → chọn repo này.
+services:
+  - type: web
+    name: popo
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /

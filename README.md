@@ -9,7 +9,23 @@ npm install
 npm start
 ```
 Mở http://localhost:3000. Bạn bè cùng wifi vào bằng địa chỉ IP mà server in ra.
-Muốn chơi qua internet: đưa lên Fly.io / Railway / VPS (cần server chạy liên tục để giữ WebSocket).
+
+## Đưa lên mạng
+Popo cần một **máy chủ Node chạy liên tục** để giữ kết nối WebSocket.
+**Vercel, Netlify, GitHub Pages không chạy được phần này** (chỉ phục vụ file tĩnh) — web sẽ hiện nhưng không tạo được phòng.
+
+Cách dễ nhất — **Render** (có gói miễn phí):
+1. Vào https://render.com, đăng nhập bằng GitHub.
+2. **New → Blueprint** → chọn repo `popo` (Render đọc file `render.yaml` có sẵn) → **Apply**.
+3. Đợi build xong, mở địa chỉ dạng `https://popo-xxxx.onrender.com` — gửi link này cho bạn bè.
+
+Gói miễn phí của Render sẽ "ngủ" khi không ai vào ~15 phút; lần vào đầu sau đó mất khoảng 30–50 giây để thức dậy
+(web tự thử kết nối lại trong lúc chờ). Railway, Fly.io hoặc VPS cũng chạy được: lệnh khởi động là `npm start`, cổng lấy từ biến `PORT`.
+
+**Vẫn muốn giữ trang web trên Vercel?** Deploy máy chủ lên Render như trên, rồi sửa `public/config.js`:
+```js
+window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
+```
 
 ## Nền tảng (phần dùng chung cho mọi game)
 - Tạo phòng / vào bằng mã 4 chữ hoặc link mời, chọn nhân vật, chủ phòng chọn game và cài đặt.
@@ -29,6 +45,7 @@ Muốn chơi qua internet: đưa lên Fly.io / Railway / VPS (cần server chạ
 ## Cấu trúc
 ```
 server/index.js            web server + đăng ký game
+public/config.js           địa chỉ máy chủ game (để trống nếu chạy chung)
 server/core.js             phòng, vào lại khi rớt mạng, biểu cảm, cài đặt
 server/games/hideseek/     luật chơi (index.js) + sinh bản đồ (maps.js)
 public/core/               trang chủ, phòng chờ, kết nối, biểu cảm, hình nhân vật dùng chung
