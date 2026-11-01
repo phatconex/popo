@@ -89,7 +89,7 @@ function genTrack(theme, lv) {
     const off = (R() - .5) * rw;
     for (let k = -2; k <= 2; k++) { const j = i + k; if (j > 0 && j < last) { const [cx, cy] = at(j, off); coins.push([Math.round(cx), Math.round(cy)]); } }
   }
-  return { theme, lv, seed, W, H, rw, pts, stops, crossers, cones, slicks, coins, time: Math.round(len / 120 + nStops * 6 + 15) };
+  return { theme, lv, seed, W, H, rw, pts, stops, crossers, cones, slicks, coins };
 }
 
 module.exports = { THEMES, THEME_IDS, genTrack };

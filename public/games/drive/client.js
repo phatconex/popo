@@ -37,7 +37,7 @@
     },
   };
 
-  const KEY_DRV = { KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r', KeyW: 'g', ArrowUp: 'g', KeyS: 'b', ArrowDown: 'b', Space: 'b' };
+  const KEY_DRV = { KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r', KeyW: 'g', ArrowUp: 'g', KeyS: 'b', Space: 'b', KeyR: 'v', ArrowDown: 'v' };
 
   let A, root, cv, ctx, mini, mctx, el = {};
   let map, role, info, snap, prevSnap, look, raf, inputTimer, resTimer, readyTimer;
@@ -81,7 +81,7 @@
         <div class="dr-sigs"></div>
         <div class="dr-pad">
           <div class="grp"><button class="pb" data-k="l"><svg viewBox="0 0 24 24" class="i"><path d="M15 5l-7 7 7 7"/></svg></button><button class="pb" data-k="r"><svg viewBox="0 0 24 24" class="i"><path d="M9 5l7 7-7 7"/></svg></button></div>
-          <div class="grp"><button class="pb brk" data-k="b"><b>Phanh</b></button><button class="pb gas" data-k="g"><b>Ga</b></button></div>
+          <div class="grp"><button class="pb rev" data-k="v"><b>Lùi</b></button><button class="pb brk" data-k="b"><b>Phanh</b></button><button class="pb gas" data-k="g"><b>Ga</b></button></div>
         </div>
         <div class="dr-keys"></div>
         <div class="dr-ov"><div class="card"><div class="ovbig"></div><h2></h2><p class="sub ovsub"></p><div class="ovbody"></div><p class="sub ovnext"></p></div></div>
@@ -94,7 +94,7 @@
     cv = q('.dr-cv'); ctx = cv.getContext('2d');
     mini = q('.dr-mini'); mctx = mini.getContext('2d');
     map = role = info = snap = prevSnap = null;
-    keys = { l: 0, r: 0, g: 0, b: 0 }; held = { l: 0, r: 0, g: 0, b: 0 }; lastIn = '';
+    keys = { l: 0, r: 0, g: 0, b: 0, v: 0 }; held = { l: 0, r: 0, g: 0, b: 0, v: 0 }; lastIn = '';
     sigs = []; sent = null; floats = []; flash = 0; shake = 0; puffs = []; lastT = performance.now(); beepT = 0; hudKey = '';
     rotate = store.get('drRotate', true);
     disp = { x: 0, y: 0, a: 0 }; camA = 0;
@@ -154,7 +154,7 @@
   function pushInput() {
     if (role !== 'driver') return;
     const l = keys.l || held.l, r = keys.r || held.r;
-    const d = { t: 'in', s: (r ? 1 : 0) - (l ? 1 : 0), g: keys.g || held.g ? 1 : 0, b: keys.b || held.b ? 1 : 0 };
+    const d = { t: 'in', s: (r ? 1 : 0) - (l ? 1 : 0), g: keys.g || held.g ? 1 : 0, b: keys.b || held.b ? 1 : 0, r: keys.v || held.v ? 1 : 0 };
     const j = JSON.stringify(d);
     if (j !== lastIn || Math.random() < .1) { lastIn = j; A.send(d); }
   }
@@ -181,7 +181,7 @@
         el.wrap.classList.toggle('is-nav', role === 'nav');
         el.wrap.classList.toggle('is-watch', role === 'watch');
         el.rtag.textContent = `Màn ${d.lv + 1}/${d.levels} · ${THEME[map.theme].name}`;
-        el.keys.innerHTML = role === 'driver' ? '<span><kbd>A</kbd><kbd>D</kbd> đánh lái</span><span><kbd>W</kbd> ga</span><span><kbd>S</kbd>/<kbd>␣</kbd> phanh, lùi</span>'
+        el.keys.innerHTML = role === 'driver' ? '<span><kbd>A</kbd><kbd>D</kbd> đánh lái</span><span><kbd>W</kbd> ga</span><span><kbd>S</kbd>/<kbd>␣</kbd> phanh</span><span><kbd>R</kbd> lùi</span>'
           : role === 'nav' ? '<span>Bấm phím trên nút để gửi tín hiệu</span><span><kbd>T</kbd> xoay bản đồ</span>' : '';
         const dn = A.player(d.driver), nn = A.player(d.nav);
         el.role.innerHTML = '';
@@ -219,9 +219,8 @@
     const key = [m.hp, m.pk, m.co, Math.ceil(m.tm), m.ph].join();
     if (key === hudKey) return;
     hudKey = key;
-    const sec = Math.ceil(Math.max(0, m.tm));
+    const sec = Math.floor(Math.max(0, m.tm)); // thời gian đã lái, không giới hạn
     el.tt.textContent = m.ph === 'ready' ? 'Sẵn sàng' : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-    el.time.classList.toggle('warn', m.ph === 'drive' && m.tm <= 10);
     el.hp.innerHTML = '';
     for (let i = 0; i < info.hearts; i++) el.hp.insertAdjacentHTML('beforeend', `<svg class="i f${i < m.hp ? '' : ' lost'}"><use href="#i-heart"/></svg>`);
     el.pk.innerHTML = `${ICON_RIDER}<span>${m.pk}/${map.stops.length}</span>`;
@@ -252,10 +251,10 @@
     const x = cc.getContext('2d'); x.scale(s, s); drawCar(x, 35, 35, -Math.PI / 2, 1.1, 0); car.append(cc);
     box.querySelector('h2').textContent = `Màn ${d.lv + 1} · ${THEME[d.map.theme].name}`;
     box.querySelector('.ovsub').textContent = role === 'driver' ? `Bạn cầm lái nhưng kính mờ hết rồi! Nghe ${nn ? nn.name : 'bạn'} chỉ đường nhé.`
-      : role === 'nav' ? `Bạn chỉ đường cho ${dn ? dn.name : 'bạn'}. Đón ${d.map.stops.length} bé khách rồi về đích!` : `${dn ? dn.name : '?'} lái, ${nn ? nn.name : '?'} chỉ đường`;
+      : role === 'nav' ? `Bạn chỉ đường cho ${dn ? dn.name : 'bạn'}. Đón ${d.map.stops.length} bé khách rồi về đích, không cần vội!` : `${dn ? dn.name : '?'} lái, ${nn ? nn.name : '?'} chỉ đường`;
     box.querySelector('.ovbody').innerHTML = role === 'nav'
       ? '<div class="tips"><span>Dừng xe sát trạm để khách lên</span><span>Tránh cọc, vũng trơn và thú băng qua đường</span><span>Đang gọi nhau thì cứ nói to!</span></div>'
-      : role === 'driver' ? '<div class="tips"><span>Đèn va chạm sáng và kêu tít tít khi sắp đâm</span><span>Xe rung là đang chạy ra ngoài cỏ</span></div>' : '';
+      : role === 'driver' ? '<div class="tips"><span>Đèn va chạm sáng và kêu tít tít khi sắp đâm</span><span>Xe rung là đang chạy ra ngoài cỏ</span><span>Lỡ qua trạm thì bấm Lùi để quay lại</span></div>' : '';
     let n = 3;
     const nx = box.querySelector('.ovnext');
     nx.innerHTML = `<b class="count">${n}</b>`;
@@ -289,12 +288,12 @@
       (totStars >= max * .4 ? A.sfx.win : A.sfx.lose)();
     } else {
       big.append(starRow(d.stars));
-      box.querySelector('h2').textContent = d.done ? (d.stars === 3 ? 'Tuyệt vời!' : 'Về đích rồi!') : d.why === 'crash' ? 'Xe hỏng mất rồi!' : 'Hết giờ!';
+      box.querySelector('h2').textContent = d.done ? (d.stars === 3 ? 'Tuyệt vời!' : 'Về đích rồi!') : 'Xe hỏng mất rồi!';
       box.querySelector('.ovsub').textContent = `Màn ${d.lv + 1} · ${THEME[d.theme].name}`;
       box.querySelector('.ovbody').innerHTML = `<div class="stats">
         <div><b>${d.picked}/${d.stops}</b><small>khách</small></div>
         <div><b>${d.coins}</b><small>xu</small></div>
-        <div><b>${d.hp}</b><small>tim còn</small></div>
+        <div><b>${Math.floor(d.secs / 60)}:${String(d.secs % 60).padStart(2, '0')}</b><small>thời gian</small></div>
         <div><b>+${d.score}</b><small>điểm</small></div></div>
         <p class="sub">Tổng đội: <b>${d.total}</b> điểm</p>`;
       (d.done ? A.sfx.win : A.sfx.lose)();

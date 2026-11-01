@@ -60,7 +60,7 @@ class Drive {
   onMsg(p, d) {
     const c = this.car;
     if (d.t === 'in' && p.id === this.driver) {
-      c.steer = clamp(+d.s || 0, -1, 1); c.gas = d.g ? 1 : 0; c.brake = d.b ? 1 : 0;
+      c.steer = clamp(+d.s || 0, -1, 1); c.gas = d.g ? 1 : 0; c.brake = d.b ? 1 : 0; c.rev = d.r ? 1 : 0;
     } else if (d.t === 'sig' && p.id === this.nav && this.phase !== 'result') {
       const k = d.k | 0;
       if (k < 0 || k >= SIGNALS || this.t - this.sigAt < SIG_GAP) return;
@@ -101,7 +101,8 @@ class Drive {
 
   tick(dt) {
     this.t += dt;
-    this.time -= dt;
+    // màn chuẩn bị/kết quả: đếm ngược; lúc lái: đếm xuôi (không giới hạn thời gian)
+    this.time += this.phase === 'drive' ? dt : -dt;
     const c = this.car, m = this.map;
 
     for (const q of this.queue) if (q.at <= this.t) {
@@ -112,14 +113,13 @@ class Drive {
     this.queue = this.queue.filter(q => !q.done);
     for (const s of this.crossState) if (s.flee > 0) s.flee = Math.max(0, s.flee - dt / 2);
 
-    if (this.phase === 'ready') { if (this.time <= 0) { this.phase = 'drive'; this.time = m.time; } }
+    if (this.phase === 'ready') { if (this.time <= 0) { this.phase = 'drive'; this.time = 0; } }
     else if (this.phase === 'drive') this.physics(dt);
     else if (this.phase === 'result' && this.time <= 0) {
       if (this.lv + 1 >= this.levels) return this.api.end(this.total > 0 ? this.team : []);
       this.nextLevel();
       return;
     }
-    if (this.phase === 'drive' && this.time <= 0) this.endLevel(false);
     if (this.api && this.map === m) this.broadcast();
   }
 
@@ -135,16 +135,12 @@ class Drive {
 
     // tăng tốc / phanh
     const vmax = off > 0 ? VMAX_OFF : VMAX;
-    if (!c.brake) c.hold = 0;
-    if (c.gas && !c.brake) c.v = Math.min(vmax, c.v + ACC * dt);
-    else if (c.brake) {
-      // giữ phanh khi xe đã dừng hẳn một lúc thì mới lùi, để dừng ở trạm không bị trôi lùi
-      if (c.v > 0) { c.v = Math.max(0, c.v - BRAKE * dt); c.hold = 0; }
-      else if ((c.hold += dt) > .5) c.v = Math.max(VREV, c.v - ACC * .5 * dt);
-    }
+    if (c.brake) c.v = c.v > 0 ? Math.max(0, c.v - BRAKE * dt) : Math.min(0, c.v + BRAKE * dt);
+    else if (c.rev && !c.gas) c.v = c.v > 0 ? Math.max(0, c.v - BRAKE * dt) : Math.max(VREV, c.v - ACC * .6 * dt);
+    else if (c.gas) c.v = c.v < 0 ? Math.min(0, c.v + BRAKE * dt) : Math.min(vmax, c.v + ACC * dt);
     else c.v *= Math.pow(c.slick ? .8 : .45, dt);
     if (c.v > vmax) c.v = Math.max(vmax, c.v - BRAKE * dt);
-    if (Math.abs(c.v) < 2 && !c.gas && !c.brake) c.v = 0;
+    if (Math.abs(c.v) < 2 && !c.gas && !c.rev) c.v = 0;
 
     c.a += c.steer * TURN * dt * clamp(Math.abs(c.v) / 90, 0, 1) * Math.sign(c.v) * (c.slick ? .6 : 1);
     const grip = c.slick ? (snowy ? GRIP_SLICK * .6 : GRIP_SLICK) : GRIP;
@@ -195,12 +191,12 @@ class Drive {
 
   endLevel(done) {
     if (this.phase !== 'drive') return;
-    const m = this.map, left = Math.max(0, Math.ceil(this.time));
+    const m = this.map, secs = Math.round(this.time);
     const all = this.picked === m.stops.length;
-    const score = this.picked * 100 + this.coins * 10 + (done ? 100 + this.hp * 30 + left * 3 : 0);
+    const score = this.picked * 100 + this.coins * 10 + (done ? 100 + this.hp * 30 : 0);
     const stars = done ? (all ? 3 : this.picked * 2 >= m.stops.length ? 2 : 1) : (this.picked > 0 ? 1 : 0);
     this.total += score;
-    const r = { lv: this.lv, theme: m.theme, done, why: done ? 'finish' : this.hp <= 0 ? 'crash' : 'time', picked: this.picked, stops: m.stops.length, coins: this.coins, hp: this.hp, left, score, stars, driver: this.driver };
+    const r = { lv: this.lv, theme: m.theme, done, why: done ? 'finish' : 'crash', picked: this.picked, stops: m.stops.length, coins: this.coins, hp: this.hp, secs, score, stars, driver: this.driver };
     this.results.push(r);
     this.phase = 'result';
     const last = this.lv + 1 >= this.levels;
@@ -232,7 +228,7 @@ class Drive {
   }
 
   onRejoin(p) { this.sendInit(p); }
-  onDisconnect(p) { if (p.id === this.driver) { this.car.steer = 0; this.car.gas = 0; this.car.brake = 0; } }
+  onDisconnect(p) { if (p.id === this.driver) { this.car.steer = 0; this.car.gas = 0; this.car.brake = 0; this.car.rev = 0; } }
   onLeave(p) { if (this.team.includes(p.id)) this.api.end([]); }
 }
 

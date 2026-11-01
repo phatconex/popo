@@ -48,13 +48,13 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 ## Trò chơi: Lái Mò (2 người)
 - Một người cầm lái nhưng kính mờ, không thấy đường. Người kia thấy bản đồ từ trên cao và chỉ đường
   bằng 8 nút tín hiệu: Trái, Phải, Thẳng, Ga, Chậm, Phanh, Lùi, Đỗ (hoặc nói qua cuộc gọi).
-- Đón các bé thú ở trạm (dừng sát trạm cho khách lên), tránh vật cản, vũng trơn, thú băng qua đường, về đích trước khi hết giờ.
+- Đón các bé thú ở trạm (dừng sát trạm cho khách lên), tránh vật cản, vũng trơn, thú băng qua đường rồi về đích. Không giới hạn thời gian, chỉ hết màn khi về đích hoặc hết tim.
 - Tài xế có đồng hồ tốc độ và "đèn va chạm" kêu tít tít khi sắp đâm; xe rung khi chạy ra cỏ.
 - Hết mỗi màn đổi vai. Đường sinh ngẫu nhiên, càng về sau càng dài và khó.
 - 4 bản đồ: Đồng quê, Đèo tuyết (đường băng rất trơn), Phố biển, Phố đêm.
 - Tuỳ chọn: số màn, tín hiệu trễ 0,5–1 giây (khó hơn: phải chỉ trước).
-- Máy tính: tài xế A/D lái, W ga, S hoặc Space phanh/lùi; hoa tiêu bấm phím ghi trên nút, T xoay bản đồ.
-  Điện thoại: nút lái và nút tín hiệu trên màn hình.
+- Máy tính: tài xế A/D lái, W ga, S hoặc Space phanh, R hoặc ↓ lùi; hoa tiêu bấm phím ghi trên nút, T xoay bản đồ.
+  Điện thoại: nút trái/phải, Lùi, Phanh, Ga cho tài xế; lưới nút tín hiệu cho hoa tiêu.
 
 ## Cấu trúc
 ```

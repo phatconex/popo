@@ -36,7 +36,7 @@
 .dr .pb{width:84px;height:84px;border-radius:26px;border:3px solid var(--ink);background:var(--cream);box-shadow:0 5px 0 var(--ink);display:grid;place-items:center;padding:0;touch-action:none;cursor:pointer;opacity:.95}
 .dr .pb svg.i{width:40px;height:40px;stroke-width:3}
 .dr .pb b{font-size:18px}
-.dr .pb.brk{background:#ffb3b3}.dr .pb.gas{background:#bdf0a8}
+.dr .pb.rev{background:#e2d6ff}.dr .pb.brk{background:#ffb3b3}.dr .pb.gas{background:#bdf0a8}
 .dr .pb.on{transform:translateY(4px);box-shadow:0 1px 0 var(--ink);filter:brightness(.95)}
 .dr.touch.is-driver .dr-pad{display:flex}
 .dr.is-driver .dr-keys{left:calc(12px + var(--sal));transform:none;flex-direction:column;gap:2px}
@@ -87,7 +87,9 @@
   .dr .sg b{font-size:13px}
   .dr-mini{top:calc(96px + var(--sat));width:84px!important;height:auto!important}
   .dr-rot{top:calc(96px + var(--sat));font-size:12px;padding:3px 8px}
-  .dr .pb{width:72px;height:72px;border-radius:22px}
+  .dr .pb{width:60px;height:68px;border-radius:20px}
+  .dr .pb b{font-size:15px}
+  .dr-pad .grp{gap:7px}
   .dr.is-driver .dr-pad{display:flex}
   .dr.is-driver .dr-keys{display:none}
   .dr-ov h2{font-size:24px}
