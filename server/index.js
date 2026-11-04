@@ -10,6 +10,7 @@ const Core = require('./core');
 const GAMES = {
   hideseek: require('./games/hideseek'),
   drive: require('./games/drive'),
+  badminton: require('./games/badminton'),
 };
 
 const PORT = process.env.PORT || 3000;

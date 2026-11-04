@@ -56,6 +56,18 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 - Máy tính: tài xế A/D lái, W ga, S hoặc Space phanh, R hoặc ↓ lùi; hoa tiêu bấm phím ghi trên nút, T xoay bản đồ.
   Điện thoại: nút trái/phải, Lùi, Phanh, Ga cho tài xế; lưới nút tín hiệu cho hoa tiêu.
 
+## Trò chơi: Cầu Lông Thú (2–4 người)
+- 1 đấu 1 hoặc 2 đấu 2, nhìn ngang sân. Chọn bé thú trước trận: Thỏ (nhảy cao), Heo (đập mạnh, chạy chậm),
+  Cánh cụt (chạy nhanh), Cáo tuyết (tầm vợt rộng).
+- Kiểu đánh: đánh thường, lốp cao, bỏ nhỏ; nhảy lên đánh khi cầu còn cao là đập cầu. Có vòng đỏ báo trước điểm rơi.
+- 3 sân: Sân vườn, Bãi biển (gió đổi mỗi pha cầu, cầu bị đẩy lệch), Sân tuyết (chạy bị trượt).
+- Hộp quà giữa sân (bật/tắt được): vợt khổng lồ, cầu lửa, cầu tàng hình, làm chậm đối thủ.
+- Pha cầu từ 10 lần đánh trở lên: ăn 2 điểm. Chơi tới 7/11/15 điểm, hơn 2 điểm mới thắng.
+- Mạng: mỗi cú đánh chỉ gửi một lần, các máy tự tính đường bay bằng cùng công thức (`public/games/badminton/physics.js`,
+  dùng chung cho server). Ai đứng bên sân nào thì máy người đó báo đỡ trúng, server kiểm tra rồi phát cú đánh mới.
+- Máy tính: A/D chạy, W nhảy, J hoặc click đánh, K lốp, L bỏ nhỏ. Điện thoại (xoay ngang): kéo nửa trái để chạy,
+  nút Nhảy, Đánh, Lốp, Bỏ nhỏ.
+
 ## Cấu trúc
 ```
 server/index.js            web server + đăng ký game
@@ -63,9 +75,11 @@ public/config.js           địa chỉ máy chủ game (để trống nếu ch�
 server/core.js             phòng, vào lại khi rớt mạng, biểu cảm, cài đặt
 server/games/hideseek/     luật chơi (index.js) + sinh bản đồ (maps.js)
 server/games/drive/        Lái Mò: luật chơi (index.js) + sinh đường (track.js)
+server/games/badminton/    Cầu Lông Thú: luật chơi, giao cầu, tính điểm, hộp quà
 public/core/               trang chủ, phòng chờ, kết nối, biểu cảm, hình nhân vật dùng chung
 public/games/hideseek/     giao diện game, vẽ bản đồ (themes.js), CSS
 public/games/drive/        giao diện Lái Mò (hoa tiêu + tài xế), CSS
+public/games/badminton/    giao diện Cầu Lông Thú, vật lý quả cầu dùng chung (physics.js), CSS
 ```
 
 ## Thêm một game mới
