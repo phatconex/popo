@@ -18,8 +18,8 @@ const THEME = {
   },
   snow: {
     sky: '#bfe6ff', ground: '#f3f7ff', patchA: '#e3ecf8', patchB: '#ffffff', path: '#c9d6e6', water: '#a8dcf2', rim: '#dbe7f3', hemi: '#c8d8ea', outside: '#eef4ff',
-    trees: [['platformer/tree-pine-snow.glb', 3.5], ['holiday/tree-snow-a.glb', 3.2], ['holiday/tree-snow-b.glb', 3.1], ['holiday/tree-snow-c.glb', 2.9]],
-    bushes: [['platformer/tree-pine-snow-small.glb', 1], ['holiday/snow-bunker.glb', .7], ['nature/plant_bushLarge.glb', .9], ['holiday/snow-pile.glb', .6]],
+    trees: [['platformer/tree-pine-snow.glb', 3.5], ['nature/tree_pineRoundA.glb', 3.2], ['platformer/tree-snow.glb', 3.1], ['nature/tree_pineTallA.glb', 3.6]],
+    bushes: [['platformer/tree-pine-snow-small.glb', 1], ['nature/plant_bushDetailed.glb', .85], ['nature/plant_bushLarge.glb', .9], ['nature/tree_pineSmallA.glb', 1]],
     props: [['holiday/present-a-cube.glb', .4], ['holiday/present-b-rectangle.glb', .38], ['holiday/lantern.glb', .8], ['holiday/rocks-medium.glb', .4]],
     rocks: [['holiday/rocks-small.glb', .3], ['nature/stone_smallA.glb', .3], ['holiday/candy-cane-red.glb', .55], ['holiday/candy-cane-green.glb', .55]],
     decor: [['holiday/rocks-small.glb', .25, 40], ['nature/grass_large.glb', .35, 30], ['holiday/snow-pile.glb', .3, 35]],

@@ -11,7 +11,7 @@ import { Overlays } from './overlays.js';
 let ctx, L, hud, ov, world = null, ents = null, fx = null, podium = null;
 let st = null, snap = null, seed = null, building = null, queue = [], offFrame = null;
 const keys = {};
-let lastInput = '', lastInputT = 0, aim = new THREE.Vector3(), aimOk = false, reticle = null;
+let firing = null, lastShot = 0, lastInput = '', lastInputT = 0, aim = new THREE.Vector3(), aimOk = false, reticle = null;
 const camT = new THREE.Vector3();
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const listeners = [];
@@ -29,7 +29,9 @@ export async function mount(c) {
   on(window, 'blur', () => { for (const k in keys) keys[k] = false; });
   const cv = engine.renderer.domElement;
   on(cv, 'pointermove', e => { if (!engine.isTouch) setAim(e.clientX, e.clientY); });
-  on(cv, 'pointerdown', e => { if (e.button > 0) return; setAim(e.clientX, e.clientY); shoot(); });
+  on(cv, 'pointerdown', e => { if (e.button > 0) return; firing = e.pointerId; setAim(e.clientX, e.clientY); shoot(); });
+  on(cv, 'pointermove', e => { if (firing === e.pointerId && ctx.engine.isTouch) setAim(e.clientX, e.clientY); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) on(cv, ev, e => { if (firing === e.pointerId) firing = null; });
   offFrame = engine.onFrame(frame);
 }
 
@@ -67,6 +69,7 @@ function teardownWorld() {
 async function startRound(d) {
   const { engine } = ctx;
   if (podium) { podium.dispose(); podium = null; }
+  L.classList.remove('final');
   ov.closeRound();
   st = { role: d.role, round: d.round, total: d.total, map: d.map };
   if (seed !== d.map.seed || !world) {
@@ -143,6 +146,7 @@ function handle(d) {
 
 async function showPodium(d) {
   const { engine, app, net } = ctx;
+  L.classList.add('final');
   podium = await ov.podium(d, app.lobby ? app.lobby.players : [], net.myId, engine, () => {});
   engine.setScene(podium.scene);
 }
@@ -162,6 +166,7 @@ function setAim(cx, cy) {
 }
 function shoot() {
   if (!snap || snap.me.role !== 'seeker' || !snap.me.alive || snap.ph !== 'playing' || !aimOk) return;
+  const now = performance.now(); if (now - lastShot < 120) return; lastShot = now;
   ctx.net.game({ t: 'shoot', x: Math.round(aim.x / U), y: Math.round(aim.z / U) });
 }
 
@@ -189,6 +194,7 @@ function frame(dt, t) {
   if (!world || !snap) return;
   const now = performance.now(), cam = ctx.engine.camera, me = snap.me;
   sendInput(now);
+  if (firing != null && snap.fz) shoot(); // Frenzy: hold to keep squirting
   ents.tick(dt, now, cam);
   fx.tick(dt); fx.sleepers(ents);
   world.tick(dt);
@@ -199,7 +205,7 @@ function frame(dt, t) {
   else { const sk = snap.k.find(k => k[6]) || snap.k[0]; const e = sk && ents.get('k' + sk[0]); if (e && e.pet) focus = e.pet.root.position; }
   if (focus) camT.lerp(focus, Math.min(1, dt * 4));
   const portrait = cam.aspect < .9, seeker = me.role === 'seeker';
-  const H = (seeker ? 13.5 : 11.5) * (portrait ? 1.3 : 1), Z = (seeker ? 8.5 : 7.5) * (portrait ? 1.15 : 1);
+  const H = (seeker ? 13.5 : 11.5) * (portrait ? 1.75 : 1), Z = (seeker ? 8.5 : 7.5) * (portrait ? 1.35 : 1);
   cam.position.set(camT.x, H, camT.z + Z); cam.lookAt(camT.x, 0, camT.z - (portrait ? 1 : .5));
   followSun(world.scene, camT.x, camT.z);
   if (me.alive && mine && mine.pet) world.covers.update(mine.pet.root.position.x, mine.pet.root.position.z);

@@ -79,3 +79,6 @@
   .hs-card .role{font-size:40px}
   .hs-feed{top:126px}
 }
+/* decorative layers must never eat clicks meant for the 3D view */
+.hs-count *,.hs-dim *,.hs-card *,.hs-podium *,.hs-feed *,.hs-top *,.hs-role *,.hs-hp *,.hs-keys *,.hs-spec *{pointer-events:none!important}
+.hs.final > :not(.hs-podium):not(.hs-back){display:none!important}

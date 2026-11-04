@@ -1,88 +1,70 @@
 # Popo
 
-Web game nhỏ cho bạn bè và cặp đôi chơi từ xa, chơi được trên cả máy tính và điện thoại.
-Toàn bộ đồ họa vẽ bằng canvas/SVG (không dùng emoji hay file ảnh).
+Tiny 3D party games for friends & couples — play together from anywhere, on desktop or phone.
+Built with three.js (no build step) and a small Node + WebSocket server.
 
-## Chạy
+## Run
 ```bash
 npm install
 npm start
 ```
-Mở http://localhost:3000. Bạn bè cùng wifi vào bằng địa chỉ IP mà server in ra.
+Open http://localhost:3000. Friends on the same Wi-Fi can join with the IP address the server prints.
 
-## Đưa lên mạng
-Popo cần một **máy chủ Node chạy liên tục** để giữ kết nối WebSocket.
-**Vercel, Netlify, GitHub Pages không chạy được phần này** (chỉ phục vụ file tĩnh) — web sẽ hiện nhưng không tạo được phòng.
+Tests: `npm test` (rules, maps, rooms). Full bot match over the network:
+```bash
+HS_HIDE_T=2 HS_ROUND_T=20 PORT=3100 node server/index.js &
+node test/bot-match.js 3100
+```
+Bots that join your room and play: `node test/bot-match.js --join ABCD 3000 3` (or `--lobby ABCD 3000 11` to fill a lobby).
 
-Cách dễ nhất — **Render** (có gói miễn phí):
-1. Vào https://render.com, đăng nhập bằng GitHub.
-2. **New → Blueprint** → chọn repo `popo` (Render đọc file `render.yaml` có sẵn) → **Apply**.
-3. Đợi build xong, mở địa chỉ dạng `https://popo-xxxx.onrender.com` — gửi link này cho bạn bè.
+## Deploy
+Popo needs a **long-running Node server** for WebSockets — Vercel / Netlify / GitHub Pages only serve static files.
 
-Gói miễn phí của Render sẽ "ngủ" khi không ai vào ~15 phút; lần vào đầu sau đó mất khoảng 30–50 giây để thức dậy
-(web tự thử kết nối lại trong lúc chờ). Railway, Fly.io hoặc VPS cũng chạy được: lệnh khởi động là `npm start`, cổng lấy từ biến `PORT`.
+**Render** (free tier): New → Blueprint → pick this repo (it reads `render.yaml`) → Apply. Share the `https://popo-xxxx.onrender.com` link.
+The free tier sleeps after ~15 min idle; the first visit takes 30–50 s to wake up (the page keeps retrying).
+Railway, Fly.io or any VPS work too: start command `npm start`, port from `PORT`.
 
-**Vẫn muốn giữ trang web trên Vercel?** Deploy máy chủ lên Render như trên, rồi sửa `public/config.js`:
+Static site somewhere else? Point it at your game server in `public/config.js`:
 ```js
 window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 ```
 
-## Nền tảng (phần dùng chung cho mọi game)
-- Tạo phòng / vào bằng mã 4 chữ hoặc link mời, chọn nhân vật, chủ phòng chọn game và cài đặt.
-- Rớt mạng (chuyển app, mất sóng, tải lại trang) được giữ chỗ 30 giây và tự vào lại đúng ván.
-- 8 biểu cảm gửi cho cả phòng, đếm số trận thắng của từng người.
+## Hide & Seek (2–12 players)
+- **Hiders** look exactly like the herd animals. Walk slowly, stay with the herd, hide behind trees and bushes.
+  Running is fast but leaves footprints.
+  Tricks: **Swap** your animal, **Call** (−3 s on the clock), **Sleep** (a shot counts as a miss), **Decoy** (release a look-alike that runs off).
+- **Seeker** has a water gun. Squirting a real animal costs 15 water; empty tank = out. **Listen** tells you whether a hider is close.
+- **Frenzy** — the last 5 seconds: the seeker is faster, misses are free and you can hold to keep squirting.
+- Everyone takes a turn as the seeker; points add up over the rounds, then a podium.
+- 3 maps with their own animals: **Farm** (Piggy, Cow, Chick, Bunny, Puppy, Kitty), **Snow Village** (Penguin, Polar Bear, Fox, Deer, Beaver),
+  **Beach** (Crab, Parrot, Monkey, Koala, Tiger).
+- Controls — desktop: WASD/arrows, Shift run, E swap, Q call, Z sleep, F decoy; seeker: mouse to aim, click to squirt, R listen.
+  Phone: joystick on the left, buttons on the right; seekers tap the ground to squirt.
+- Quick test timings: `HS_HIDE_T=5 HS_ROUND_T=45 npm start`.
 
-## Trò chơi: Trốn Tìm Nông Trại
-- 3 bản đồ, mỗi bản đồ có bộ thú riêng:
-  - Nông trại: heo, bò, cừu, gà, vịt, thỏ
-  - Làng tuyết: chim cánh cụt, gấu trắng, hải cẩu, cáo tuyết, tuần lộc
-  - Bãi biển: cua, rùa biển, hải âu, hồng hạc, rái cá
-- Nhiều ván, đổi vai sau mỗi ván, cộng điểm, có bảng xếp hạng chung cuộc.
-- Người trốn: Chạy (để lại dấu chân), Kêu (−3 giây), Giả ngủ (bị bắn cũng như bắn nhầm thú),
-  Phân thân (thả thú giả chạy đi — không giới hạn, hồi 20 giây), Đổi thú (bất cứ lúc nào).
-- Người tìm: súng nước, Nghe ngóng (biết người trốn gần hay xa).
-- **Giờ G — 5 giây cuối ván:** người tìm giữ chuột/giữ tay để bắn liên tục, bắn nhầm không mất máu, chạy nhanh hơn.
-- Test nhanh: `HS_ROUND_T=30 HS_HIDE_T=3 npm start` để rút ngắn thời gian ván.
-- Máy tính: WASD + chuột, phím Q/E/F/R. Điện thoại: kéo nửa trái để đi, chạm nửa phải để bắn, nút kỹ năng.
+## The app
+- Open screen → Play (new room) or Join Room (4-letter code or `?room=ABCD` invite link).
+- 3D lobby with up to 12 players: pick one of 24 animals, Ready, host picks map and rounds, Start.
+- Dropped connection (switching apps, reload, bad signal): your seat is kept for 30 s and you rejoin the same round.
+- 8 emotes for everyone in the room.
 
-## Trò chơi: Lái Mò (2 người)
-- Một người cầm lái nhưng kính mờ, không thấy đường. Người kia thấy bản đồ từ trên cao và chỉ đường
-  bằng 8 nút tín hiệu: Trái, Phải, Thẳng, Ga, Chậm, Phanh, Lùi, Đỗ (hoặc nói qua cuộc gọi).
-- Đón các bé thú ở trạm (dừng sát trạm cho khách lên), tránh vật cản, vũng trơn, thú băng qua đường rồi về đích. Không giới hạn thời gian, chỉ hết màn khi về đích hoặc hết tim.
-- Tài xế có đồng hồ tốc độ và "đèn va chạm" kêu tít tít khi sắp đâm; xe rung khi chạy ra cỏ.
-- Hết mỗi màn đổi vai. Đường sinh ngẫu nhiên, càng về sau càng dài và khó.
-- 4 bản đồ: Đồng quê, Đèo tuyết (đường băng rất trơn), Phố biển, Phố đêm.
-- Tuỳ chọn: số màn, tín hiệu trễ 0,5–1 giây (khó hơn: phải chỉ trước).
-- Máy tính: tài xế A/D lái, W ga, S hoặc Space phanh, R hoặc ↓ lùi; hoa tiêu bấm phím ghi trên nút, T xoay bản đồ.
-  Điện thoại: nút trái/phải, Lùi, Phanh, Ga cho tài xế; lưới nút tín hiệu cho hoa tiêu.
+Blind Drive and Critter Badminton are paused while they move to 3D (their code stays in `server/games/drive`, `server/games/badminton`, `public/games/drive`, `public/games/badminton`).
 
-## Trò chơi: Cầu Lông Thú (2–4 người)
-- 1 đấu 1 hoặc 2 đấu 2, nhìn ngang sân. Chọn bé thú trước trận: Thỏ (nhảy cao), Heo (đập mạnh, chạy chậm),
-  Cánh cụt (chạy nhanh), Cáo tuyết (tầm vợt rộng).
-- Kiểu đánh: đánh thường, lốp cao, bỏ nhỏ; nhảy lên đánh khi cầu còn cao là đập cầu. Có vòng đỏ báo trước điểm rơi.
-- 3 sân: Sân vườn, Bãi biển (gió đổi mỗi pha cầu, cầu bị đẩy lệch), Sân tuyết (chạy bị trượt).
-- Hộp quà giữa sân (bật/tắt được): vợt khổng lồ, cầu lửa, cầu tàng hình, làm chậm đối thủ.
-- Pha cầu từ 10 lần đánh trở lên: ăn 2 điểm. Chơi tới 7/11/15 điểm, hơn 2 điểm mới thắng.
-- Mạng: mỗi cú đánh chỉ gửi một lần, các máy tự tính đường bay bằng cùng công thức (`public/games/badminton/physics.js`,
-  dùng chung cho server). Ai đứng bên sân nào thì máy người đó báo đỡ trúng, server kiểm tra rồi phát cú đánh mới.
-- Máy tính: A/D chạy, W nhảy, J hoặc click đánh, K lốp, L bỏ nhỏ. Điện thoại (xoay ngang): kéo nửa trái để chạy,
-  nút Nhảy, Đánh, Lốp, Bỏ nhỏ.
-
-## Cấu trúc
+## Layout
 ```
-server/index.js            web server + đăng ký game
-public/config.js           địa chỉ máy chủ game (để trống nếu chạy chung)
-server/core.js             phòng, vào lại khi rớt mạng, biểu cảm, cài đặt
-server/games/hideseek/     luật chơi (index.js) + sinh bản đồ (maps.js)
-server/games/drive/        Lái Mò: luật chơi (index.js) + sinh đường (track.js)
-server/games/badminton/    Cầu Lông Thú: luật chơi, giao cầu, tính điểm, hộp quà
-public/core/               trang chủ, phòng chờ, kết nối, biểu cảm, hình nhân vật dùng chung
-public/games/hideseek/     giao diện game, vẽ bản đồ (themes.js), CSS
-public/games/drive/        giao diện Lái Mò (hoa tiêu + tài xế), CSS
-public/games/badminton/    giao diện Cầu Lông Thú, vật lý quả cầu dùng chung (physics.js), CSS
+server/index.js               static files + WebSocket, game registry
+server/core.js                rooms, rejoin, ready flag, emotes, settings
+server/games/hideseek/        rules (index.js) + map generator (maps.js)
+public/index.html, app.js     page shell + screen router
+public/core3d/                engine, asset loader, network, UI kit, sound, animals table (shared with the server)
+public/core3d/screens/        Open and Lobby screens
+public/games/hideseek3d/      world builder, entities, HUD, effects, overlays
+public/assets/kenney/         3D models (Kenney, CC0) + licenses
+test/                         node:test unit tests + bot match script
+docs/superpowers/             design spec and implementation plan
 ```
 
-## Thêm một game mới
-1. Server: tạo `server/games/<id>/index.js` xuất `{ meta, create(api) }` (xem chú thích đầu `server/core.js`), rồi đăng ký trong `server/index.js`.
-2. Client: tạo `public/games/<id>/client.js` gọi `registerGame('<id>', { thumb, mount, onMsg, unmount })` (xem chú thích đầu `public/core/core.js`), thêm thẻ `<script>` vào `public/index.html`.
-3. Xoá game đó khỏi danh sách "Sắp ra mắt" (`COMING`) trong `public/core/core.js`.
+## Credits
+- 3D models: [Kenney](https://kenney.nl) — Cube Pets, Nature Kit, Platformer Kit, Fantasy Town Kit, Holiday Kit, Pirate Kit, Survival Kit (CC0). License files are next to the models.
+- Font: [Lilita One](https://fonts.google.com/specimen/Lilita+One) (SIL Open Font License).
+- three.js (MIT).

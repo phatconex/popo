@@ -43,6 +43,7 @@ export class Overlays {
       this.lastCount = n;
       this.$('.hs-count').innerHTML = n ? `<span>${n}</span>` : '<span class="go">GO!</span>';
       n ? this.sfx.tick() : this.sfx.go();
+      clearTimeout(this.countT); this.countT = setTimeout(() => { this.$('.hs-count').innerHTML = ''; }, 1000);
     }
     if (!hiding && n === null) this.lastCount = null;
   }
