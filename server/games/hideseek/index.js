@@ -1,9 +1,7 @@
-// Trốn Tìm Nông Trại — logic game (server giữ toàn bộ trạng thái để chống gian lận cơ bản).
+// Hide & Seek — game logic (the server owns all state as basic anti-cheat).
 const { genMap, blocked, THEME_IDS } = require('./maps');
 
 // ---- Luật chơi (chỉnh ở đây cho cân bằng) ----
-// chiều cao từng con (để bắn trúng giữa thân); bộ thú mỗi bản đồ nằm ở maps.js
-const KIND_H = [30, 40, 32, 32, 28, 36, 36, 34, 24, 30, 48, 22, 22, 30, 52, 28];
 const HIDE_T = +process.env.HS_HIDE_T || 15;   // giây cho người trốn đi ẩn
 const ROUND_T = +process.env.HS_ROUND_T || 180; // giây mỗi ván (HS_ROUND_T để test nhanh)
 const NPC_SPD = 55;         // tốc độ thú đi dạo
@@ -11,7 +9,9 @@ const WALK = 55;            // người trốn đi bộ = y hệt thú
 const RUN = 160;            // chạy nhanh: để lại dấu chân!
 const SEEK_SPD = 170;
 const RANGE = 480;          // tầm bắn
-const HIT_R = 20;
+const HIT_R = 35;            // shots are tested on the ground plane (3D view from above)
+const BODY_R = 34;           // animals push each other apart
+const GRID = 120;
 const SHOT_CD = 0.6;
 const NPC_PENALTY = 15;     // bắn nhầm thú mất máu
 const CATCH_BONUS = 20;     // bắt được người hồi máu
@@ -28,12 +28,12 @@ const PTS_CATCH = 100, PTS_ALL = 50, PTS_PER_SEC = 2, PTS_SURVIVE = 100;
 
 const meta = {
   id: 'hideseek',
-  name: 'Trốn Tìm Nông Trại',
-  desc: 'Hoá thành thú lẫn vào đàn, hay cầm súng nước đi tìm?',
-  min: 2, max: 12, tag: 'Hành động',
+  name: 'Hide & Seek',
+  desc: 'Blend into the herd — or grab the water gun and hunt!',
+  min: 2, max: 12, tag: 'Action',
   settings: [
-    { key: 'map', label: 'Bản đồ', def: 'random', options: [{ v: 'random', label: 'Ngẫu nhiên' }, { v: 'farm', label: 'Nông trại' }, { v: 'snow', label: 'Làng tuyết' }, { v: 'beach', label: 'Bãi biển' }] },
-    { key: 'rounds', label: 'Số ván', def: 'auto', options: [{ v: 'auto', label: 'Ai cũng được tìm' }, { v: '2', label: '2 ván' }, { v: '4', label: '4 ván' }, { v: '6', label: '6 ván' }] },
+    { key: 'map', label: 'Map', def: 'random', options: [{ v: 'random', label: 'Random' }, { v: 'farm', label: 'Farm' }, { v: 'snow', label: 'Snow Village' }, { v: 'beach', label: 'Beach' }] },
+    { key: 'rounds', label: 'Rounds', def: 'auto', options: [{ v: 'auto', label: 'Everyone seeks once' }, { v: '2', label: '2' }, { v: '4', label: '4' }, { v: '6', label: '6' }] },
   ],
 };
 
@@ -57,6 +57,50 @@ function pickTarget(m, a) {
   a.tx = a.x; a.ty = a.y;
 }
 
+// Push overlapping bodies apart (half the overlap each). Uses a grid so we never test every pair.
+// A push that would land in a blocked spot or off the map is skipped for that body.
+function separate(bodies, m) {
+  const cells = new Map(), key = (cx, cy) => cx * 100003 + cy;
+  for (const o of bodies) { const k = key(Math.floor(o.x / GRID), Math.floor(o.y / GRID)); let c = cells.get(k); if (!c) cells.set(k, c = []); c.push(o); }
+  const min = BODY_R * 2;
+  const tryMove = (o, nx, ny) => {
+    nx = clamp(nx, 60, m.W - 60); ny = clamp(ny, 90, m.H - 40);
+    if (!blocked(m, nx, ny, 0)) { o.x = nx; o.y = ny; }
+  };
+  for (const a of bodies) {
+    const cx = Math.floor(a.x / GRID), cy = Math.floor(a.y / GRID);
+    for (let ix = -1; ix <= 1; ix++) for (let iy = -1; iy <= 1; iy++) {
+      const c = cells.get(key(cx + ix, cy + iy)); if (!c) continue;
+      for (const b of c) {
+        if (b === a) continue;
+        let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < .01) { const ang = Math.random() * Math.PI * 2; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; } else { dx /= d; dy /= d; }
+        const push = (min - d) / 2;
+        tryMove(a, a.x - dx * push, a.y - dy * push);
+        tryMove(b, b.x + dx * push, b.y + dy * push);
+      }
+    }
+  }
+}
+
+// First candidate {o:{x,y}} whose centre lies within HIT_R of the segment from (sx,sy) toward (tx,ty), length ≤ RANGE.
+function rayHit(sx, sy, tx, ty, cands) {
+  if (![sx, sy, tx, ty].every(isFinite)) return null;
+  let dx = tx - sx, dy = ty - sy;
+  const d = Math.hypot(dx, dy);
+  if (d < 1) return null;
+  dx /= d; dy /= d;
+  const len = Math.min(d, RANGE);
+  let best = null, bt = Infinity;
+  for (const c of cands) {
+    const ox = c.o.x - sx, oy = c.o.y - sy, t = ox * dx + oy * dy;
+    if (t < 0 || t > len + HIT_R) continue;
+    if (Math.abs(ox * dy - oy * dx) < HIT_R && t < bt) { bt = t; best = c; }
+  }
+  return best;
+}
+
 class HideSeek {
   constructor(api) {
     this.api = api;
@@ -68,7 +112,7 @@ class HideSeek {
 
   start() {
     const players = this.api.players();
-    for (const p of players) this.ps.set(p.id, { id: p.id, name: p.name, score: 0, seeks: 0, input: {} });
+    for (const p of players) this.ps.set(p.id, { id: p.id, name: p.name, av: p.av | 0, score: 0, seeks: 0, input: {} });
     const s = this.api.settings.rounds;
     this.total = s === 'auto' ? clamp(players.length, 2, 6) : +s;
     this.newRound();
@@ -83,7 +127,7 @@ class HideSeek {
     // xoay vòng: ai làm người tìm ít nhất thì tới lượt
     const gs = shuffle([...this.ps.values()]).sort((a, b) => a.seeks - b.seeks);
     const nSeek = Math.max(1, Math.round(gs.length / 4));
-    const nNpc = Math.round(m.W * m.H / 100000) + gs.length * 6;
+    const nNpc = Math.round(m.W * m.H / 220000) + gs.length * 4;
     const eids = shuffle([...Array(nNpc + gs.length).keys()].map(i => i + 1));
     this.nextEid = nNpc + gs.length + 1;
     this.npcs = [];
@@ -170,22 +214,13 @@ class HideSeek {
     if (this.phase !== 'playing' || g.role !== 'seeker' || g.cool > 0 || !isFinite(tx) || !isFinite(ty)) return;
     const frenzy = this.frenzy();
     g.cool = frenzy ? FRENZY_CD : SHOT_CD;
-    const sx = g.x, sy = g.y - 24;
-    let dx = tx - sx, dy = ty - sy;
-    const d = Math.hypot(dx, dy) || 1, len = Math.min(d, RANGE);
-    dx /= d; dy /= d;
-    // tia nước trúng con vật ĐẦU TIÊN trên đường bay
-    let best = null, bt = Infinity;
+    const sx = g.x, sy = g.y;
     const cands = [...this.npcs.map(o => ({ o, npc: true })), ...[...this.ps.values()].filter(q => q.role === 'hider' && q.alive).map(o => ({ o, npc: false }))];
-    for (const c of cands) {
-      const hy = KIND_H[c.o.skin] * .5, ox = c.o.x - sx, oy = c.o.y - hy - sy;
-      const t = ox * dx + oy * dy;
-      if (t < 0 || t > len + HIT_R) continue;
-      if (Math.abs(ox * dy - oy * dx) < HIT_R && t < bt) { bt = t; best = c; }
-    }
-    const fx = { t: 'fx', kind: 'shot', x1: sx | 0, y1: sy | 0, x2: (sx + dx * len) | 0, y2: (sy + dy * len) | 0, hit: 0, by: g.id };
+    const best = rayHit(sx, sy, tx, ty, cands);
+    const d = Math.hypot(tx - sx, ty - sy) || 1, len = Math.min(d, RANGE);
+    const fx = { t: 'fx', kind: 'shot', x1: sx | 0, y1: sy | 0, x2: (sx + (tx - sx) / d * len) | 0, y2: (sy + (ty - sy) / d * len) | 0, hit: 0, by: g.id };
     if (best) {
-      fx.x2 = best.o.x | 0; fx.y2 = (best.o.y - KIND_H[best.o.skin] * .5) | 0;
+      fx.x2 = best.o.x | 0; fx.y2 = best.o.y | 0;
       if (best.npc || best.o.sleep > 0) {          // người đang giả ngủ: bị tính như bắn nhầm thú
         if (best.npc) { best.o.stun = 1.4; best.o.sleep = 0; best.o.run = 0; }
         if (frenzy) fx.free = 1; else g.hp -= NPC_PENALTY;
@@ -267,6 +302,8 @@ class HideSeek {
       g.moving = true; g.dx = mx; g.dy = my;
       if (running) this.footprint(g, mx, my, dt);
     }
+    const bodies = [...this.npcs, ...[...this.ps.values()].filter(g => g.alive && !(g.role === 'seeker' && !playing))];
+    separate(bodies, m);
     this.fp = this.fp.filter(f => this.clock - f.t < FOOTPRINT_LIFE);
     if (this.phase === 'hiding' && this.time <= 0) { this.phase = 'playing'; this.time = ROUND_T; this.fp = []; }
     this.checkWin();
@@ -283,7 +320,7 @@ class HideSeek {
       ...this.npcs.map(a => [a.eid, a.x | 0, a.y | 0, a.skin, a.flip, fl(a)]),
       ...hiders.map(g => [g.eid, g.x | 0, g.y | 0, g.skin, g.flip, fl(g)]),
     ].sort((a, b) => a[2] - b[2]);
-    const k = all.filter(g => g.role === 'seeker').map(g => [g.id, g.name, g.x | 0, g.y | 0, g.hp, +g.ang.toFixed(2), g.alive ? 1 : 0]);
+    const k = all.filter(g => g.role === 'seeker').map(g => [g.id, g.name, g.x | 0, g.y | 0, g.hp, +g.ang.toFixed(2), g.alive ? 1 : 0, g.av]);
     const fp = this.fp.map(f => [f.x | 0, f.y | 0, +f.a.toFixed(1), +(this.clock - f.t).toFixed(1)]);
     const base = { t: 's', ph: this.phase, tm: ceil0(this.time), e, k, fp, hl: hiders.length, fz: this.frenzy() ? 1 : 0, ht: all.filter(g => g.role === 'hider').length };
     const mates = hiders.map(g => [g.eid, g.name]);
@@ -337,4 +374,4 @@ class HideSeek {
   }
 }
 
-module.exports = { meta, create: api => new HideSeek(api) };
+module.exports = { meta, create: api => new HideSeek(api), _test: { separate, rayHit, BODY_R, HIT_R, RANGE } };
