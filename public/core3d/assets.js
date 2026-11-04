@@ -37,6 +37,14 @@ export async function prop(path, height, opts = {}) {
   return root;
 }
 
+// A static prop scaled so its widest horizontal side equals `size` (world units).
+export async function fitted(path, size, opts = {}) {
+  const g = await loadModel(path);
+  const b = new THREE.Box3().setFromObject(g.scene);
+  const w = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) || 1;
+  return prop(path, 0, { ...opts, scale: size / w });
+}
+
 // Set the opacity of a prop made with {fade:true}.
 export function setOpacity(root, a) {
   root.traverse(m => { if (m.isMesh) { m.material.opacity = a; m.material.depthWrite = a > .95; } });

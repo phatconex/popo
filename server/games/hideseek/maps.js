@@ -17,7 +17,7 @@ const THEMES = {
     buildings: sc([[150, 110, 300, 230], [2720, 1820, 300, 230]]),
     ponds: sc([[2350, 560, 270, 165], [850, 1680, 230, 145], [1700, 1120, 160, 105]]),
     patches: sc([[700, 260, 520, 300], [1450, 1720, 600, 280], [2600, 1080, 420, 380], [260, 900, 360, 420]]),
-    count: { trees: 112, bushes: 72, props: 30, rocks: 44 },
+    count: { trees: 68, bushes: 40, props: 18, rocks: 24 },
     landmarks: [['windmill', 130, 1], ['watermill', 120, 1], ['stall', 80, 2], ['cart', 65, 2], ['well', 60, 1], ['tent', 85, 2]],
   },
   snow: {
@@ -25,7 +25,7 @@ const THEMES = {
     buildings: sc([[140, 120, 250, 210], [2560, 260, 250, 210], [1320, 1820, 250, 210]]),
     ponds: sc([[1500, 820, 330, 200], [560, 1500, 250, 150], [2420, 1560, 270, 170]]),
     patches: sc([[720, 230, 440, 280], [2000, 1080, 380, 330], [260, 720, 330, 320]]),
-    count: { trees: 141, bushes: 54, props: 40, rocks: 36 },
+    count: { trees: 84, bushes: 32, props: 24, rocks: 20 },
     landmarks: [['snowman', 55, 4], ['tree-decorated', 70, 2], ['train', 120, 1], ['sled', 60, 2], ['snow-pile', 70, 3]],
   },
   beach: {
@@ -33,7 +33,7 @@ const THEMES = {
     buildings: sc([[150, 110, 230, 190], [1560, 130, 230, 190], [2980, 520, 230, 190]]),
     ponds: sc([[900, 920, 230, 135], [2420, 1080, 210, 125]]),
     patches: sc([[620, 300, 440, 260], [1900, 680, 440, 300], [1280, 1230, 520, 230], [2720, 1180, 400, 250]]),
-    count: { trees: 87, bushes: 54, props: 54, rocks: 32 },
+    count: { trees: 52, bushes: 32, props: 30, rocks: 18 },
     landmarks: [['tower', 110, 1], ['wreck', 140, 1], ['boat', 75, 3], ['flag', 40, 2], ['crates', 60, 3]],
   },
 };
@@ -93,10 +93,10 @@ function genMap(theme) {
     place(list, n, 500, rad + 60, m.landmarks, (x, y) => ({ type, x, y, r: rad, rot: +(r() * Math.PI * 2).toFixed(2) }));
     m.landmarks.push(...list);
   }
-  place(m.trees, T.count.trees, 150, 80, m.landmarks, (x, y) => [x, y, r() * 4 | 0]);
-  place(m.bushes, T.count.bushes, 110, 50, m.trees, (x, y) => [x, y, r() * 4 | 0]);
-  place(m.props, T.count.props, 150, 50, [...m.trees, ...m.bushes], (x, y) => [x, y, r() * 4 | 0, PROP_R]);
-  place(m.rocks, T.count.rocks, 90, 30, [...m.trees, ...m.props], (x, y) => [x, y, r() * 4 | 0]);
+  place(m.trees, T.count.trees, 210, 80, m.landmarks, (x, y) => [x, y, r() * 4 | 0]);
+  place(m.bushes, T.count.bushes, 150, 50, m.trees, (x, y) => [x, y, r() * 4 | 0]);
+  place(m.props, T.count.props, 200, 50, [...m.trees, ...m.bushes], (x, y) => [x, y, r() * 4 | 0, PROP_R]);
+  place(m.rocks, T.count.rocks, 130, 30, [...m.trees, ...m.props], (x, y) => [x, y, r() * 4 | 0]);
   return m;
 }
 

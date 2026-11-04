@@ -80,5 +80,28 @@ async function match(port) {
   process.exit(0);
 }
 
-if (args[0] === '--lobby') lobbyOnly(args[1], +args[2] || 3000, +args[3] || 11);
+// Bots that join an existing room and play (wander; shoot when seeker): node test/bot-match.js --join ABCD 3000 3
+async function joinPlay(code, port, n) {
+  for (let i = 0; i < n; i++) {
+    const b = bot(port, 'Bot ' + (i + 1), (i * 7 + 3) % 24); await b.open;
+    b.send({ t: 'join', name: b.name, av: b.av, code });
+    b.send({ t: 'profile', ready: true });
+    let s = null, id = 0, dir = [0, 0];
+    b.on(m => { if (m.t === 'joined') id = m.id; if (m.t === 'g' && m.d.t === 's') s = m.d; });
+    setInterval(() => {
+      if (!s) return;
+      if (Math.random() < .3) dir = Math.random() < .3 ? [0, 0] : [Math.random() * 2 - 1, Math.random() * 2 - 1];
+      b.send({ t: 'g', d: { t: 'in', mx: dir[0], my: dir[1], run: false } });
+      if (s.me.role === 'seeker' && s.ph === 'playing' && s.e.length && Math.random() < .08) {
+        const me = s.k.find(k => k[0] === id); if (!me) return;
+        const near = s.e.map(e => [e, Math.hypot(e[1] - me[2], e[2] - me[3])]).sort((x, y) => x[1] - y[1])[0][0];
+        b.send({ t: 'g', d: { t: 'shoot', x: near[1], y: near[2] } });
+      }
+    }, 600);
+  }
+  console.log(`${n} bots playing in ${code}. Ctrl+C to stop.`);
+}
+
+if (args[0] === '--join') joinPlay(args[1], +args[2] || 3000, +args[3] || 3);
+else if (args[0] === '--lobby') lobbyOnly(args[1], +args[2] || 3000, +args[3] || 11);
 else match(+args[0] || 3100).catch(e => { console.error('FAIL', e.message); process.exit(1); });

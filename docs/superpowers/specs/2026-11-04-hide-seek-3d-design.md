@@ -216,7 +216,7 @@ public/
 
 ### 9.1 Map nhỏ → map to gấp rưỡi
 - Kích thước: Farm 4800×3300, Snow Village 4500×3300, Beach 5100×3000 (đơn vị server). Toạ độ khung cố định trong `THEMES` nhân 1,5.
-- Số cây/bụi/đồ vật/đá nhân ~1,8 để mật độ chỗ trốn tương đương.
+- Số cây/bụi/đồ vật/đá: ban đầu nhân ~1,8, nhưng chơi thử thấy chật nên giảm còn khoảng ×1,1 (Farm 68 cây, 40 bụi, 18 đồ vật, 24 đá) và tăng khoảng cách tối thiểu giữa chúng; hoa/cỏ trang trí giảm một nửa.
 - Thú máy: `round(W*H / 220000) + người chơi * 4` (Farm ≈ 72 + 4/người).
 
 ### 9.2 Thú xuyên qua nhau → va chạm trên server
