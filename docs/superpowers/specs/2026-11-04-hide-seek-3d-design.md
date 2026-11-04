@@ -210,5 +210,33 @@ public/
 6. Snow Village và Beach.
 7. Tối ưu điện thoại, dọn file cũ, cập nhật README.
 
-## 9. Việc cần bạn quyết trước khi làm
-- Có tải thêm **Fantasy Town Kit, Holiday Kit, Pirate Kit** không (mình sẽ báo tên file và dung lượng trước khi tải)? Nếu không, nhà cửa dựng bằng khối trong code.
+## 9. Bổ sung sau khi thử mockup (2026-11-04)
+
+Đã quyết: **tải thêm Fantasy Town Kit, Holiday Kit, Pirate Kit, Survival Kit** (CC0). Góp ý khi chơi thử mockup và cách xử lý:
+
+### 9.1 Map nhỏ → map to gấp rưỡi
+- Kích thước: Farm 4800×3300, Snow Village 4500×3300, Beach 5100×3000 (đơn vị server). Toạ độ khung cố định trong `THEMES` nhân 1,5.
+- Số cây/bụi/đồ vật/đá nhân ~1,8 để mật độ chỗ trốn tương đương.
+- Thú máy: `round(W*H / 220000) + người chơi * 4` (Farm ≈ 72 + 4/người).
+
+### 9.2 Thú xuyên qua nhau → va chạm trên server
+- Mọi thú (thú máy, người trốn, người tìm) có bán kính va chạm `BODY_R = 34`. Mỗi tick, các cặp chồng lên nhau bị đẩy ra theo nửa phần chồng lấn (dùng lưới không gian ô 120 để không phải xét mọi cặp).
+- Thân cây và đồ vật lớn (thùng, xe, lều, người tuyết…) cũng chặn đường: bán kính riêng mỗi loại, đưa vào `blocked()`. Bụi cỏ vẫn đi xuyên được (để trốn).
+- Thú máy đang đi mà bị chặn thì chọn đích mới, không đứng đẩy nhau mãi.
+
+### 9.3 Giật ở một số góc → tối ưu hiển thị
+- Vật tĩnh lặp lại nhiều (hoa, cỏ, cây trồng, hàng rào, đá nhỏ) vẽ bằng `InstancedMesh`: mỗi loại mô hình một lần vẽ.
+- Chỉ cây và vật lớn đổ bóng; vùng bóng đổ bám theo camera, bản đồ bóng 1024 (máy tính) và tắt trên điện thoại.
+- Hoạt ảnh: thú ngoài khung nhìn không cập nhật; thú ở xa cập nhật 15 lần/giây thay vì mỗi khung.
+- Cây mờ khi mình đứng sau: chỉ xét các cây gần (lưới không gian), không duyệt mọi vật thể mỗi khung.
+- Giới hạn `pixelRatio` (máy tính 2, điện thoại 1,5) và tự hạ xuống 1 nếu đo được dưới 40 khung/giây trong 3 giây liên tục.
+
+### 9.4 Cảnh chưa đa dạng → thêm nhiều loại vật theo từng map
+
+| Map | Điểm nhấn lớn (chặn đường) | Vật nhỏ rải khắp |
+|---|---|---|
+| Farm | cối xay gió, cối xay nước bên ao, kho dựng bằng tường/mái Fantasy Town, quầy chợ, xe kéo, giếng/đài phun nước nhỏ, lều | ruộng nhiều loại cây trồng, đống gỗ, thùng, bao, hàng rào gỗ, hoa, nấm, gốc cây, đá |
+| Snow Village | nhà gỗ mái tuyết (Holiday cabin), người tuyết, cây thông trang trí, tàu hoả đồ chơi, xe trượt, đống tuyết | quà, đèn lồng, kẹo gậy, cây thông phủ tuyết, đá tuyết, tuần lộc tượng |
+| Beach | chòi sàn gỗ (Pirate structure), tháp canh, tàu đắm, thuyền chèo, cầu tàu ra biển | cây dừa, thùng, rương, cờ, bụi cỏ biển, đá cát, vỏ sò |
+
+Mỗi map có thêm đường đi bằng ô đường (Fantasy Town road / đá lát), và mặt đất có vài vùng màu khác nhau để nhìn không đơn điệu.
