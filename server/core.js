@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const RECONNECT_MS = 30000;
 const MAX_PLAYERS = 12;
 const EMOTES = 8;
-const AVATARS = 6;
+const AVATARS = 24; // xem public/core3d/animals.js
 
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
@@ -23,7 +23,7 @@ class Core {
     this.rooms = new Map();
     this.nextId = 1;
     let last = Date.now();
-    setInterval(() => {
+    this.timer = setInterval(() => {
       const now = Date.now(), dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       for (const r of this.rooms.values()) if (r.game) r.game.tick(dt);
@@ -41,6 +41,8 @@ class Core {
     ws.on('close', () => this.onClose(conn));
   }
 
+  close() { clearInterval(this.timer); }
+
   makeCode() {
     let c;
     do { c = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join(''); } while (this.rooms.has(c));
@@ -54,7 +56,7 @@ class Core {
   lobbyMsg(r) {
     return {
       t: 'lobby', code: r.code, host: r.host, state: r.game ? 'playing' : 'lobby', game: r.gameId, settings: r.settings,
-      players: [...r.players.values()].map(p => ({ id: p.id, name: p.name, av: p.av, on: p.connected, wins: p.wins })),
+      players: [...r.players.values()].map(p => ({ id: p.id, name: p.name, av: p.av, on: p.connected, wins: p.wins, ready: !!p.ready })),
     };
   }
   bcast(r, o) {
@@ -78,20 +80,20 @@ class Core {
     switch (m.t) {
       case 'join': {
         if (p) return;
-        const name = String(m.name || '').trim().slice(0, 14) || 'Bạn nhỏ';
+        const name = String(m.name || '').trim().slice(0, 14) || 'Player';
         const av = Math.abs(m.av | 0) % AVATARS;
         let room;
         if (m.code) {
           room = this.rooms.get(String(m.code).trim().toUpperCase());
-          if (!room) return send(conn.ws, { t: 'err', msg: 'Không tìm thấy phòng này!' });
-          if (room.game) return send(conn.ws, { t: 'err', msg: 'Phòng đang chơi, đợi ván sau nha!' });
-          if (room.players.size >= MAX_PLAYERS) return send(conn.ws, { t: 'err', msg: 'Phòng đầy rồi!' });
+          if (!room) return send(conn.ws, { t: 'err', msg: 'Room not found' });
+          if (room.game) return send(conn.ws, { t: 'err', msg: 'This room is already playing — wait for the next game' });
+          if (room.players.size >= MAX_PLAYERS) return send(conn.ws, { t: 'err', msg: 'Room is full' });
         } else {
           const gameId = this.games[m.game] ? m.game : Object.keys(this.games)[0];
           room = { code: this.makeCode(), players: new Map(), host: null, game: null, gameId, settings: this.defaults(gameId) };
           this.rooms.set(room.code, room);
         }
-        const np = { id: this.nextId++, token: crypto.randomBytes(12).toString('hex'), name, av, room, wins: 0, emoteAt: 0 };
+        const np = { id: this.nextId++, token: crypto.randomBytes(12).toString('hex'), name, av, room, wins: 0, emoteAt: 0, ready: false };
         room.players.set(np.id, np);
         if (!room.host) room.host = np.id;
         this.attach(conn, np);
@@ -112,6 +114,7 @@ class Core {
         if (!r || r.game) return;
         if (m.name) p.name = String(m.name).trim().slice(0, 14) || p.name;
         if (m.av != null) p.av = Math.abs(m.av | 0) % AVATARS;
+        if (m.ready != null) p.ready = !!m.ready;
         this.sync(r);
         break;
       case 'settings': {
@@ -126,7 +129,7 @@ class Core {
         if (!r || r.host !== p.id || r.game) return;
         const g = this.games[r.gameId];
         const n = [...r.players.values()].filter(q => q.connected).length;
-        if (n < g.meta.min) return send(conn.ws, { t: 'err', msg: `Cần ít nhất ${g.meta.min} người để chơi!` });
+        if (n < g.meta.min) return send(conn.ws, { t: 'err', msg: `Need at least ${g.meta.min} players` });
         r.game = g.create(this.api(r));
         this.sync(r);
         r.game.start();
@@ -183,6 +186,7 @@ class Core {
         if (!r.game) return;
         r.game = null;
         for (const id of winners) { const q = r.players.get(id); if (q) q.wins++; }
+        for (const q of r.players.values()) q.ready = false;
         core.sync(r);
       },
     };
