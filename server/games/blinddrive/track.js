@@ -61,13 +61,15 @@ function genTrack(theme, level, seed, opts = {}) {
   for (let k = 0; k < slickN; k++) kinds.push('slick');
   kinds.push('crosser', 'crosser');
   for (let k = kinds.length - 1; k > 0; k--) { const j = Math.floor(rnd() * (k + 1)); [kinds[k], kinds[j]] = [kinds[j], kinds[k]]; }
-  const slack = Math.max(0, (hi - lo) - (kinds.length - 1) * GAP);
+  // very short tracks (BD_FAST len 60) cannot keep the 14 m spacing: squeeze the gap so objects stay on the road
+  const gap = Math.max(1, Math.min(GAP, Math.floor((hi - lo) / (kinds.length - 1))));
+  const slack = Math.max(0, (hi - lo) - (kinds.length - 1) * gap);
   const cuts = Array.from({ length: kinds.length }, () => Math.floor(rnd() * (slack + 1))).sort((x, y) => x - y);
   const stops = [], coinRows = [], slicks = [], crossers = [];
   const riders = T.riders.slice();
   for (let k = riders.length - 1; k > 0; k--) { const j = Math.floor(rnd() * (k + 1)); [riders[k], riders[j]] = [riders[j], riders[k]]; }
   kinds.forEach((kind, k) => {
-    const i = lo + k * GAP + cuts[k];
+    const i = lo + k * gap + cuts[k];
     if (kind === 'stop') stops.push({ i, side: rnd() < .5 ? -1 : 1, kind: riders[stops.length % riders.length] });
     else if (kind === 'coin') coinRows.push(i);
     else if (kind === 'slick') slicks.push({ x: pts[i][0], z: pts[i][1], rx: Math.min(rw, r2(range(1, rw))), rz: r2(range(1.6, 2.2)), a: r2(headingAt(i)) });

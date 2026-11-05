@@ -48,7 +48,7 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 - Dropped connection (switching apps, reload, bad signal): your seat is kept for 30 s and you rejoin the same round.
 - 8 emotes for everyone in the room.
 
-Blind Drive and Critter Badminton are paused while they move to 3D (their code stays in `server/games/drive`, `server/games/badminton`, `public/games/drive`, `public/games/badminton`).
+Critter Badminton is paused while it moves to 3D (its code stays in `server/games/badminton` and `public/games/badminton`).
 
 ## Layout
 ```

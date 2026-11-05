@@ -222,3 +222,407 @@ test('meta shape', () => {
   assert.deepStrictEqual(G.meta.teams, { count: 4, max: 3, names: ['Red', 'Blue', 'Green', 'Yellow'] });
   assert.deepStrictEqual(G.meta.settings.map(s => s.key), ['map', 'levels', 'delay']);
 });
+
+// ---- Task 5: game flow (fake api drives tick and messages) ----
+const DT = .05;
+function bdApi(teams, settings = {}) {
+  const players = teams.map((team, i) => ({ id: i + 1, name: 'P' + (i + 1), av: i, team, connected: true }));
+  const api = {
+    settings: { map: 'country', levels: 2, delay: 0, ...settings },
+    players: () => players.slice(),
+    send: (p, d) => api.out.push({ to: p.id, d }),
+    bcast: d => api.out.push({ to: 0, d }),
+    end: w => api.ends.push(w),
+    out: [], ends: [], list: players,
+    p: id => players.find(q => q.id === id),
+    msgs: (t, to) => api.out.filter(m => m.d.t === t && (to === undefined || m.to === to)).map(m => m.d),
+    leave(g, id) { const i = players.findIndex(q => q.id === id); const [q] = players.splice(i, 1); g.onLeave(q); },
+  };
+  return api;
+}
+function newGame(teams, settings) { const api = bdApi(teams, settings); const g = G.create(api); g.start(); return { api, g }; }
+const ticks = (g, n) => { for (let i = 0; i < n; i++) g.tick(DT); };
+function until(g, cond, max = 20000) { for (let i = 0; i < max && !cond(); i++) g.tick(DT); assert.ok(cond(), 'condition never met'); }
+const toRace = g => until(g, () => g.ph === 'race');
+const lastSnap = api => api.msgs('s').at(-1);
+const carOf = (api, team) => lastSnap(api).cars.find(c => c[0] === team);
+const tp = (api, team) => lastSnap(api).tp.find(c => c[0] === team);
+const teamById = (g, id) => g.teams.find(t => t.id === id);
+// point s metres along the centre line and the heading there
+function along(tr, s) {
+  const p = tr.pts, f = Math.max(0, Math.min(p.length - 1.001, s / 2)), k = Math.floor(f), u = f - k;
+  return { x: p[k][0] + (p[k + 1][0] - p[k][0]) * u, z: p[k][1] + (p[k + 1][1] - p[k][1]) * u, a: Math.atan2(p[k + 1][0] - p[k][0], p[k + 1][1] - p[k][1]) };
+}
+// put a team's car somewhere directly (as if its driver had been sending poses)
+function place(g, id, x, z, v = 0) { const t = teamById(g, id); Object.assign(t.car, { x, z, v, t: g.clock }); t.seen = g.clock; }
+const driverP = (g, api, id) => api.p(teamById(g, id).driver);
+const sendCar = (g, api, id, pose) => g.onMsg(driverP(g, api, id), { t: 'car', v: 0, ...pose });
+
+test('flow: ready -> count -> race -> result -> next level -> final -> end', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  const init1 = api.msgs('init', 1)[0];
+  assert.strictEqual(init1.level, 1); assert.strictEqual(init1.levels, 2);
+  assert.deepStrictEqual(init1.teams.map(t => [t.id, t.members, t.driver]), [[0, [1, 2], 1], [1, [3, 4], 3]]);
+  assert.deepStrictEqual(init1.me, { team: 0, role: 'driver' });
+  assert.deepStrictEqual(api.msgs('init', 2)[0].me, { team: 0, role: 'nav' });
+  assert.strictEqual(init1.start.length, 2);
+  const [s0, s1] = init1.start;
+  assert.ok(Math.abs(Math.hypot(s0[1] - s1[1], s0[2] - s1[2]) - 1.2) < .02, 'teams 1.2 m apart');
+  const phases = [];
+  let guard = 0;
+  while (!api.ends.length && guard++ < 20000) {
+    if (g.ph === 'race') for (const t of g.teams) if (!t.place && t.id === 0) { const e = g.track.pts[g.track.finishI]; place(g, 0, e[0], e[1]); }
+    g.tick(DT);
+    const s = lastSnap(api);
+    if (s && phases.at(-1) !== s.ph) phases.push(s.ph);
+  }
+  assert.deepStrictEqual(phases, ['ready', 'count', 'race', 'result', 'ready', 'count', 'race', 'result', 'final']);
+  assert.deepStrictEqual(api.ends, [[1, 2]]);
+  const init2 = api.msgs('init', 1)[1];
+  assert.strictEqual(init2.level, 2);
+  assert.deepStrictEqual(init2.teams.map(t => t.driver), [2, 4]);
+  assert.deepStrictEqual(init2.me, { team: 0, role: 'nav' });
+  assert.strictEqual(api.msgs('level').length, 2);
+  const fin = api.msgs('final')[0];
+  assert.deepStrictEqual(fin.rows.map(r => [r.team, r.rank, r.members]), [[0, 1, [1, 2]], [1, 2, [3, 4]]]);
+  ticks(g, 100);
+  assert.strictEqual(api.ends.length, 1);
+});
+
+test('race: driving to the finish ranks teams and scores', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  toRace(g);
+  const tr = g.track, end = tr.finishI * 2 + 1;
+  let sa = 2, sb = 2;
+  for (let k = 0; k < 2000 && g.ph === 'race'; k++) {
+    sa = Math.min(end, sa + .8); sb = Math.min(end, sb + .5); // within the 1.025 m per-tick move limit
+    if (!teamById(g, 0).place) sendCar(g, api, 0, along(tr, sa));
+    if (!teamById(g, 1).place) sendCar(g, api, 1, along(tr, sb));
+    g.tick(DT);
+  }
+  assert.strictEqual(g.ph, 'result');
+  const lv = api.msgs('level')[0];
+  assert.strictEqual(lv.level, 1);
+  const A = lv.rows.find(r => r.team === 0), B = lv.rows.find(r => r.team === 1);
+  assert.strictEqual(A.place, 1); assert.strictEqual(B.place, 2);
+  assert.strictEqual(A.points, 300 + A.picked * 100 + A.coins * 10);
+  assert.strictEqual(B.points, 200 + B.picked * 100 + B.coins * 10);
+  assert.strictEqual(A.total, A.points);
+  assert.ok(A.coins > 0, 'centre-line coins picked');
+  const fx = api.msgs('fx').filter(f => f.kind === 'finish');
+  assert.deepStrictEqual(fx.map(f => [f.team, f.i]), [[0, 1], [1, 2]]);
+});
+
+test('race: same-tick finish', () => {
+  { // larger index first
+    const { api, g } = newGame([0, 0, 1, 1]);
+    toRace(g);
+    const p = g.track.pts, f = g.track.finishI;
+    place(g, 0, p[f][0], p[f][1]); place(g, 1, p[f + 2][0], p[f + 2][1]);
+    g.tick(DT);
+    assert.strictEqual(teamById(g, 1).place, 1); assert.strictEqual(teamById(g, 0).place, 2);
+    assert.deepStrictEqual(tp(api, 1).slice(0, 4), [1, 0, 0, 1]);
+  }
+  { // same index: smaller team id first
+    const { g } = newGame([0, 0, 1, 1]);
+    toRace(g);
+    const p = g.track.pts, f = g.track.finishI;
+    place(g, 1, p[f + 1][0], p[f + 1][1]); place(g, 0, p[f + 1][0], p[f + 1][1]);
+    g.tick(DT);
+    assert.strictEqual(teamById(g, 0).place, 1); assert.strictEqual(teamById(g, 1).place, 2);
+  }
+});
+
+test('race: boarding needs 0.8 s slow inside the ring; coins picked once', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  toRace(g);
+  const ring = BD.stopPoints(g.track, g.track.stops[0]).ring, P = g.track.pts, si = g.track.stops[0].i;
+  const tl = Math.hypot(P[si + 1][0] - P[si][0], P[si + 1][1] - P[si][1]);
+  const out = { x: ring.x + 3 * (P[si + 1][0] - P[si][0]) / tl, z: ring.z + 3 * (P[si + 1][1] - P[si][1]) / tl }; // 3 m along the road
+  const hold = (n, v = 0, x = ring.x, z = ring.z) => { for (let k = 0; k < n; k++) { place(g, 0, x, z, v); g.tick(DT); } };
+  hold(10, 1.5); // too fast: no progress
+  assert.strictEqual(teamById(g, 0).picked, 0);
+  hold(10); // .5 s
+  hold(4, 0, out.x, out.z); // outside: decays at half speed -> .4 s
+  hold(7); // .75 s
+  assert.strictEqual(teamById(g, 0).picked, 0);
+  hold(1); // .8 s
+  assert.strictEqual(teamById(g, 0).picked, 1);
+  assert.deepStrictEqual(api.msgs('fx').filter(f => f.kind === 'pick').map(f => [f.team, f.i]), [[0, 0]]);
+  hold(40);
+  assert.strictEqual(teamById(g, 0).picked, 1, 'a stop is picked once per team');
+  assert.strictEqual(teamById(g, 1).picked, 0);
+  assert.strictEqual(tp(api, 0)[1], 1);
+  // coins
+  const [cx, cz] = g.track.coins[0];
+  place(g, 0, cx, cz); g.tick(DT); place(g, 0, cx, cz); g.tick(DT);
+  assert.strictEqual(teamById(g, 0).coins, 1);
+  assert.strictEqual(teamById(g, 1).coins, 0);
+  place(g, 1, cx, cz); g.tick(DT);
+  assert.strictEqual(teamById(g, 1).coins, 1, 'coins are per team');
+  assert.deepStrictEqual(api.msgs('fx').filter(f => f.kind === 'coin').map(f => [f.team, f.i]), [[0, 0], [1, 0]]);
+  assert.deepStrictEqual(tp(api, 0).slice(1, 3), [1, 1]);
+});
+
+test('race: off-road over 6 m spins out and sends fix; moves ignored for 2 s', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  toRace(g);
+  ticks(g, 20); // 1 s so a long move is still valid
+  const p = g.track.pts, a0 = Math.atan2(p[3][0] - p[2][0], p[3][1] - p[2][1]);
+  const off = { x: p[2][0] - Math.cos(a0) * 7, z: p[2][1] + Math.sin(a0) * 7, a: a0 };
+  sendCar(g, api, 0, off);
+  assert.ok(Math.abs(teamById(g, 0).car.x - off.x) < 1e-9, 'move accepted');
+  g.tick(DT);
+  const fixes = api.msgs('fix', 1);
+  assert.strictEqual(fixes.length, 1);
+  const n = BD.nearestOnTrack(g.track, off.x, off.z).i;
+  assert.deepStrictEqual([fixes[0].x, fixes[0].z, fixes[0].v], [p[n][0], p[n][1], 0]);
+  assert.ok(Math.abs(fixes[0].a - Math.atan2(p[n + 1][0] - p[n][0], p[n + 1][1] - p[n][1])) < .001);
+  assert.strictEqual(api.msgs('fix', 2).length, 0, 'fix only to the driver');
+  assert.ok(api.msgs('fx').some(f => f.kind === 'spin' && f.team === 0));
+  assert.strictEqual(carOf(api, 0)[5] & 1, 1);
+  for (let k = 0; k < 38; k++) { sendCar(g, api, 0, { x: p[n][0] + .3, z: p[n][1], a: 0 }); g.tick(DT); }
+  assert.deepStrictEqual(carOf(api, 0).slice(1, 3), [p[n][0], p[n][1]], 'pose frozen while spinning');
+  assert.strictEqual(carOf(api, 0)[5] & 1, 1);
+  ticks(g, 3);
+  assert.strictEqual(carOf(api, 0)[5] & 1, 0, 'spin over after 2 s');
+  // invulnerable for 1.3 s: off-road again does not spin
+  sendCar(g, api, 0, { x: p[n][0] - Math.cos(a0) * 1, z: p[n][1] + Math.sin(a0) * 1, a: 0 });
+  assert.notStrictEqual(teamById(g, 0).car.x, p[n][0]);
+  teamById(g, 0).car.x -= 6.5; // 7.5 m from the centre line while invulnerable
+  ticks(g, 2);
+  assert.strictEqual(api.msgs('fix', 1).length, 1);
+  ticks(g, 30); // invulnerability over
+  assert.strictEqual(api.msgs('fix', 1).length, 2);
+});
+
+test('race: crosser hit spins out', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  toRace(g);
+  const c = g.track.crossers[0];
+  until(g, () => BD.crosserPos(g.track, c, g.lt + DT).onRoad);
+  const q = BD.crosserPos(g.track, c, g.lt + DT);
+  place(g, 0, q.x, q.z, 2);
+  place(g, 1, q.x, q.z, .3); // slow: no hit
+  g.tick(DT);
+  assert.ok(teamById(g, 0).spin > 0);
+  assert.strictEqual(teamById(g, 1).spin, 0);
+  assert.strictEqual(api.msgs('fix', 1).length, 1);
+  assert.ok(lastSnap(api).cr.length === g.track.crossers.length && lastSnap(api).cr[0].length === 3);
+});
+
+test('messages: garbage ignored', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  const drv = api.p(1), nav = api.p(2);
+  g.onMsg(drv, { t: 'car', x: 5, z: 5, a: 0, v: 0 }); // during ready
+  toRace(g);
+  ticks(g, 2);
+  const before = JSON.stringify(teamById(g, 0).car);
+  const bad = [{}, { t: 'car' }, { t: 'car', x: NaN, z: 0, a: 0, v: 0 }, { t: 'car', x: '1', z: 0, a: 0, v: 0 }, { t: 'car', x: 0, z: Infinity, a: 0, v: 0 },
+    { t: 'car', x: 0, z: 1, a: 'x', v: 0 }, { t: 'car', x: 0, z: 1, a: 0, v: null }, { t: 'nope' }, { t: 'car', x: [], z: {}, a: 0, v: 0 }];
+  for (const d of bad) assert.doesNotThrow(() => g.onMsg(drv, d));
+  g.onMsg(nav, { t: 'car', x: teamById(g, 0).car.x + .2, z: teamById(g, 0).car.z, a: 0, v: 0 }); // navigator
+  g.onMsg({ id: 99 }, { t: 'car', x: 0, z: 0, a: 0, v: 0 }); // not a player in a team
+  assert.strictEqual(JSON.stringify(teamById(g, 0).car), before);
+  for (const k of [9, -1, '2', 1.5, null, undefined, NaN]) assert.doesNotThrow(() => g.onMsg(nav, { t: 'sig', k }));
+  g.onMsg(drv, { t: 'sig', k: 1 }); // the driver cannot signal
+  g.onMsg({ id: 99 }, { t: 'sig', k: 1 });
+  assert.strictEqual(api.msgs('sig').length, 0);
+  assert.strictEqual(api.msgs('sent').length, 0);
+  g.onMsg(nav, { t: 'sig', k: 3 });
+  g.onMsg(nav, { t: 'sig', k: 4 }); // too soon
+  g.tick(DT);
+  g.onMsg(nav, { t: 'sig', k: 5 }); // .05 s later: still too soon
+  ticks(g, 3);
+  g.onMsg(nav, { t: 'sig', k: 6 });
+  assert.deepStrictEqual(api.msgs('sig', 1).map(s => [s.k, s.from]), [[3, 2], [6, 2]]);
+  assert.deepStrictEqual(api.msgs('sent', 2).map(s => s.k), [3, 6]);
+  assert.strictEqual(api.msgs('sig').length, 2, 'signals go only to the driver');
+  // too-far move is dropped and answered with a fix of the old pose
+  const c = teamById(g, 0).car, old = [c.x, c.z];
+  g.onMsg(drv, { t: 'car', x: c.x + 30, z: c.z, a: 0, v: 0 });
+  assert.deepStrictEqual([c.x, c.z], old);
+  const fx = api.msgs('fix', 1).at(-1);
+  assert.deepStrictEqual([fx.x, fx.z], old.map(v => Math.round(v * 100) / 100));
+});
+
+test('signals arrive after the delay setting', () => {
+  const { api, g } = newGame([0, 0, 1, 1], { delay: .5 });
+  toRace(g);
+  g.onMsg(api.p(2), { t: 'sig', k: 2 });
+  assert.deepStrictEqual(api.msgs('sent', 2).map(s => s.k), [2]);
+  ticks(g, 9);
+  assert.strictEqual(api.msgs('sig', 1).length, 0);
+  ticks(g, 2);
+  assert.deepStrictEqual(api.msgs('sig', 1).map(s => s.k), [2]);
+});
+
+test('stall: no car message for 1 s -> v 0 in snapshot', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  toRace(g);
+  const c = teamById(g, 0).car;
+  sendCar(g, api, 0, { x: c.x, z: c.z + .3, a: c.a, v: 5, g: 1 });
+  ticks(g, 10);
+  assert.strictEqual(carOf(api, 0)[4], 5);
+  assert.strictEqual(carOf(api, 0)[5] & 2, 2, 'gas flag');
+  ticks(g, 12);
+  assert.strictEqual(carOf(api, 0)[4], 0);
+});
+
+test('disconnect: driver offline 5 s -> teammate drives; rejoin -> navigator until next level', () => {
+  const { api, g } = newGame([0, 0, 1, 1], { levels: 4 });
+  toRace(g);
+  const p1 = api.p(1);
+  p1.connected = false; g.onDisconnect(p1);
+  ticks(g, 90); // 4.5 s
+  assert.strictEqual(teamById(g, 0).driver, 1);
+  assert.strictEqual(api.msgs('roles').length, 0);
+  ticks(g, 12);
+  assert.strictEqual(teamById(g, 0).driver, 2);
+  const r2 = api.msgs('roles', 2).at(-1);
+  assert.deepStrictEqual(r2.teams.map(t => [t.id, t.driver]), [[0, 2], [1, 3]]);
+  assert.deepStrictEqual(r2.me, { team: 0, role: 'driver' });
+  assert.deepStrictEqual(api.msgs('roles', 3).at(-1).me, { team: 1, role: 'driver' });
+  assert.strictEqual(api.msgs('fix', 2).length, 1, 'new driver gets the car pose');
+  // the new driver can move the car
+  const c = teamById(g, 0).car;
+  sendCar(g, api, 0, { x: c.x, z: c.z + .4, a: c.a });
+  assert.strictEqual(api.p(teamById(g, 0).driver).id, 2);
+  // rejoin
+  const nInit = api.msgs('init', 1).length;
+  p1.connected = true; g.onRejoin(p1);
+  const ri = api.msgs('init', 1);
+  assert.strictEqual(ri.length, nInit + 1);
+  assert.deepStrictEqual(ri.at(-1).me, { team: 0, role: 'nav' });
+  assert.strictEqual(ri.at(-1).teams[0].driver, 2);
+  assert.ok(api.out.at(-1).to === 1 && api.out.at(-1).d.t === 's', 'latest snapshot re-sent');
+  ticks(g, 120);
+  assert.strictEqual(teamById(g, 0).driver, 2, 'stays navigator for the rest of the level');
+  // next levels rotate normally
+  g.endLevel(); until(g, () => g.level === 2);
+  assert.strictEqual(teamById(g, 0).driver, 2);
+  g.endLevel(); until(g, () => g.level === 3);
+  assert.strictEqual(teamById(g, 0).driver, 1);
+  assert.deepStrictEqual(api.msgs('init', 1).at(-1).me, { team: 0, role: 'driver' });
+});
+
+test('leave: team down to 1 -> solo', () => {
+  const { api, g } = newGame([0, 0, 1, 1, 1]);
+  toRace(g);
+  api.leave(g, 1);
+  const t0 = teamById(g, 0);
+  assert.deepStrictEqual([t0.members, t0.driver], [[2], 2]);
+  assert.deepStrictEqual(api.msgs('roles', 2).at(-1).me, { team: 0, role: 'solo' });
+  assert.strictEqual(api.msgs('fix', 2).length, 1);
+  g.tick(DT);
+  assert.strictEqual(api.ends.length, 0);
+  // a navigator leaving a team of 3 keeps the driver
+  api.leave(g, 4);
+  assert.deepStrictEqual([teamById(g, 1).members, teamById(g, 1).driver], [[3, 5], 3]);
+  g.endLevel(); until(g, () => g.level === 2);
+  assert.deepStrictEqual(api.msgs('init', 2).at(-1).me, { team: 0, role: 'solo' });
+  assert.strictEqual(teamById(g, 1).driver, 5);
+  // whole team gone -> off the board
+  api.leave(g, 2);
+  g.tick(DT);
+  assert.deepStrictEqual(g.teams.map(t => t.id), [1]);
+  assert.deepStrictEqual(lastSnap(api).cars.map(c => c[0]), [1]);
+});
+
+test('fewer than 2 connected players -> api.end([])', () => {
+  { // disconnect
+    const { api, g } = newGame([-1, -1]);
+    toRace(g);
+    const p = api.p(2); p.connected = false; g.onDisconnect(p);
+    assert.strictEqual(api.ends.length, 0);
+    g.tick(DT);
+    assert.deepStrictEqual(api.ends, [[]]);
+    ticks(g, 10);
+    assert.strictEqual(api.ends.length, 1);
+  }
+  { // leave
+    const { api, g } = newGame([0, 0, 1]);
+    api.leave(g, 3); api.leave(g, 2);
+    assert.strictEqual(api.ends.length, 0);
+    g.tick(DT);
+    assert.deepStrictEqual(api.ends, [[]]);
+  }
+});
+
+test('all members of a team offline -> it does not hold up the level end', () => {
+  { // another connected team still racing: ends AFTER_FIRST after the first finish
+    const { api, g } = newGame([0, 0, 1, 1, 2, 2]);
+    for (const id of [5, 6]) { api.p(id).connected = false; g.onDisconnect(api.p(id)); }
+    toRace(g);
+    const e = g.track.pts[g.track.finishI];
+    place(g, 0, e[0], e[1]); g.tick(DT);
+    assert.strictEqual(g.ph, 'race');
+    assert.strictEqual(lastSnap(api).fin, 20);
+    ticks(g, 390);
+    assert.strictEqual(g.ph, 'race');
+    ticks(g, 15);
+    assert.strictEqual(g.ph, 'result');
+  }
+  { // the finishing team is the only one with a connected member: ends now
+    const { api, g } = newGame([0, 0, 1, 1, 2, 2]);
+    for (const id of [3, 4, 5, 6]) { api.p(id).connected = false; g.onDisconnect(api.p(id)); }
+    toRace(g);
+    const e = g.track.pts[g.track.finishI];
+    place(g, 0, e[0], e[1]); g.tick(DT);
+    assert.strictEqual(g.ph, 'result');
+    const lv = api.msgs('level')[0];
+    assert.deepStrictEqual(lv.rows.map(r => [r.team, r.place]), [[0, 1], [1, null], [2, null]]);
+  }
+});
+
+test('snapshot shape and timers', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  g.tick(DT);
+  let s = lastSnap(api);
+  assert.deepStrictEqual(Object.keys(s).sort(), ['cars', 'cr', 'fin', 'ph', 't', 'tm', 'tp']);
+  assert.strictEqual(s.ph, 'ready'); assert.strictEqual(s.tm, 3); assert.strictEqual(s.fin, null);
+  const init = api.msgs('init', 1)[0];
+  assert.deepStrictEqual(s.cars.map(c => c.slice(0, 4)), init.start);
+  toRace(g);
+  ticks(g, 41);
+  s = lastSnap(api);
+  assert.strictEqual(s.ph, 'race'); assert.strictEqual(s.tm, 2);
+  assert.deepStrictEqual(s.tp.map(r => r.slice(0, 4)), [[0, 0, 0, null], [1, 0, 0, null]]);
+});
+
+test('random map never repeats the previous level', () => {
+  const { g } = newGame([0, 0, 1, 1], { map: 'random', levels: 6 });
+  let prev = g.track.theme;
+  for (let k = 0; k < 5; k++) { g.endLevel(); until(g, () => g.level === k + 2); assert.notStrictEqual(g.track.theme, prev); prev = g.track.theme; }
+});
+
+test('genTrack: short BD_FAST tracks keep every object on the road', () => {
+  for (let seed = 1; seed <= 30; seed++) for (const theme of Object.keys(BD.THEMES)) for (let level = 0; level <= 5; level++) {
+    const t = genTrack(theme, level, seed, { len: 60 }), tag = `${theme} L${level} seed ${seed}`;
+    for (const i of [...t.stops.map(s => s.i), ...t.crossers.map(c => c.i)]) assert.ok(i >= 6 && i <= t.finishI - 5, `${tag}: object at ${i}`);
+    assert.strictEqual(t.stops.length, level >= 2 ? 4 : 3);
+    for (const st of t.stops) { const r = BD.stopPoints(t, st).ring; assert.ok(Number.isFinite(r.x) && Number.isFinite(r.z)); }
+  }
+  // default lengths are unchanged by the squeeze
+  const a = genTrack('country', 0, 7), b = genTrack('country', 0, 7, {});
+  assert.deepStrictEqual(a, b);
+});
+
+test('BD_FAST: a full match runs on short tracks and ends', () => {
+  const { execFileSync } = require('node:child_process');
+  const script = `
+    const G = require(${JSON.stringify(require.resolve('../server/games/blinddrive'))});
+    const ps = [1, 2, 3, 4].map((id, i) => ({ id, team: i >> 1, connected: true }));
+    let ended = null;
+    const api = { settings: { map: 'random', levels: 2, delay: 0 }, players: () => ps, send() {}, bcast() {}, end: w => { ended = w; } };
+    const g = G.create(api); g.start();
+    for (let k = 0; k < 3000 && !ended; k++) {
+      if (g.ph === 'race') { const t = g.teams[0], e = g.track.pts[g.track.finishI]; Object.assign(t.car, { x: e[0], z: e[1] }); t.seen = g.clock; }
+      g.tick(.05);
+    }
+    process.stdout.write(JSON.stringify({ ended, len: g.track.pts.length, clock: Math.round(g.clock) }));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', script], { env: { ...process.env, BD_FAST: '1' } }).toString());
+  assert.deepStrictEqual(out.ended, [1, 2]);
+  assert.strictEqual(out.len, 31);
+  assert.ok(out.clock < 40, `fast match took ${out.clock} s`);
+});

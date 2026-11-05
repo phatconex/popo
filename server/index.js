@@ -7,9 +7,10 @@ const { WebSocketServer } = require('ws');
 const Core = require('./core');
 
 // Thêm game mới: tạo thư mục server/games/<id> rồi đăng ký ở đây.
-// Blind Drive (./games/drive) and Critter Badminton (./games/badminton) are paused until they move to 3D.
+// Critter Badminton (./games/badminton) is paused until it moves to 3D.
 const GAMES = {
   hideseek: require('./games/hideseek'),
+  blinddrive: require('./games/blinddrive'),
 };
 
 const PORT = process.env.PORT || 3000;
