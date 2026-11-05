@@ -1,4 +1,4 @@
-# Popo
+# Pawty
 
 Tiny 3D party games for friends & couples — play together from anywhere, on desktop or phone.
 Built with three.js (no build step) and a small Node + WebSocket server.
@@ -18,7 +18,7 @@ node test/bot-match.js 3100
 Bots that join your room and play: `node test/bot-match.js --join ABCD 3000 3` (or `--lobby ABCD 3000 11` to fill a lobby).
 
 ## Deploy
-Popo needs a **long-running Node server** for WebSockets — Vercel / Netlify / GitHub Pages only serve static files.
+Pawty needs a **long-running Node server** for WebSockets — Vercel / Netlify / GitHub Pages only serve static files.
 
 **Render** (free tier): New → Blueprint → pick this repo (it reads `render.yaml`) → Apply. Share the `https://popo-xxxx.onrender.com` link.
 The free tier sleeps after ~15 min idle; the first visit takes 30–50 s to wake up (the page keeps retrying).

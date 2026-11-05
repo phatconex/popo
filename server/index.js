@@ -1,4 +1,4 @@
-// Popo — server: phục vụ file tĩnh + WebSocket cho mọi game.
+// Pawty — server: phục vụ file tĩnh + WebSocket cho mọi game.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -37,7 +37,7 @@ const core = new Core(GAMES);
 new WebSocketServer({ server }).on('connection', ws => core.connect(ws));
 
 server.listen(PORT, () => {
-  console.log(`Popo dang chay: http://localhost:${PORT}`);
+  console.log(`Pawty dang chay: http://localhost:${PORT}`);
   for (const ifs of Object.values(os.networkInterfaces()))
     for (const i of ifs || []) if (i.family === 'IPv4' && !i.internal) console.log(`   Ban be cung wifi vao: http://${i.address}:${PORT}`);
 });

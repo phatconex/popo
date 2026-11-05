@@ -1,4 +1,4 @@
-// Popo app: routes between screens (Open, Lobby) and the running game, driven by server messages.
+// Pawty app: routes between screens (Open, Lobby) and the running game, driven by server messages.
 import { engine } from './core3d/engine.js';
 import { net } from './core3d/net.js';
 import * as ui from './core3d/ui.js';

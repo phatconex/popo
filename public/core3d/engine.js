@@ -1,4 +1,4 @@
-// Popo 3D engine: one renderer + camera for the whole app, a frame loop, quality settings per device.
+// Pawty 3D engine: one renderer + camera for the whole app, a frame loop, quality settings per device.
 import * as THREE from 'three';
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;

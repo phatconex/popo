@@ -1,7 +1,7 @@
 {
-  "name": "popo",
+  "name": "pawty",
   "version": "2.0.0",
-  "description": "Popo — web game nhỏ cho bạn bè và cặp đôi chơi từ xa",
+  "description": "Pawty — web game nhỏ cho bạn bè và cặp đôi chơi từ xa",
   "main": "server/index.js",
   "engines": {
     "node": ">=18"

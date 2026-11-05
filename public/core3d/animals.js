@@ -1,4 +1,4 @@
-// Popo — the 24 playable animals (Kenney Cube Pets). Shared by the server (require) and the browser (window.ANIMALS).
+// Pawty — the 24 playable animals (Kenney Cube Pets). Shared by the server (require) and the browser (window.ANIMALS).
 // The index is the animal code sent over the network (lobby avatar `av`, hide & seek `skin`). Never reorder.
 (function (root) {
   const ANIMALS = [

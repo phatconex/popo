@@ -1,4 +1,4 @@
-// WebSocket connection to the Popo server: join/leave, automatic reconnect + rejoin with the room token.
+// WebSocket connection to the Pawty server: join/leave, automatic reconnect + rejoin with the room token.
 // Events: 'welcome', 'joined', 'lobby', 'emote', 'g' (game message), 'err', 'reconnecting', 'reconnected', 'lost', 'disconnected'.
 const SERVER_URL = (() => {
   const s = String(window.POPO_SERVER || '').trim().replace(/\/+$/, '');

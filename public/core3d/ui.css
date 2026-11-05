@@ -1,4 +1,4 @@
-/* Popo 3D — shared UI kit (party game style, Lilita One) */
+/* Pawty 3D — shared UI kit (party game style, Lilita One) */
 :root{--ink:#24304a;--sun:#ffb81f;--sky:#4fb4ff;--leaf:#55d36b;--rose:#ff5d6c;--soft:#6a7690}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff;font-family:'Lilita One',system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:manipulation}

@@ -3,11 +3,11 @@ import * as THREE from 'three';
 import { island } from './island.js';
 
 const css = `
-.op-logo{position:absolute;left:0;right:0;top:max(9vh,84px);display:flex;justify-content:center;font-size:min(26vw,170px);line-height:1;pointer-events:none!important;transition:transform .6s cubic-bezier(.3,1.5,.5,1)}
+.op-logo{position:absolute;left:0;right:0;top:max(9vh,84px);display:flex;justify-content:center;font-size:min(21vw,160px);line-height:1;pointer-events:none!important;transition:transform .6s cubic-bezier(.3,1.5,.5,1)}
 .op-logo span{display:inline-block;-webkit-text-stroke:.09em var(--ink);paint-order:stroke fill;text-shadow:0 .07em 0 var(--ink),0 .14em 0 rgba(20,30,50,.3);animation:ophop 2.4s ease-in-out infinite}
-.op-logo span:nth-child(1){color:#ff5d6c}.op-logo span:nth-child(2){color:#ffc727;animation-delay:.12s}.op-logo span:nth-child(3){color:#55d36b;animation-delay:.24s}.op-logo span:nth-child(4){color:#4fb4ff;animation-delay:.36s}
+.op-logo span:nth-child(1){color:#ff5d6c}.op-logo span:nth-child(2){color:#ffc727;animation-delay:.12s}.op-logo span:nth-child(3){color:#55d36b;animation-delay:.24s}.op-logo span:nth-child(4){color:#4fb4ff;animation-delay:.36s}.op-logo span:nth-child(5){color:#9a7cff;animation-delay:.48s}
 @keyframes ophop{0%,60%,100%{transform:none}20%{transform:translateY(-.14em) scale(.95,1.06) rotate(-4deg)}35%{transform:scale(1.08,.92)}}
-.op-sub{position:absolute;left:0;right:0;top:calc(max(9vh,84px) + min(26vw,170px) + 6px);text-align:center;font-size:min(5.6vw,26px);pointer-events:none!important}
+.op-sub{position:absolute;left:0;right:0;top:calc(max(9vh,84px) + min(21vw,160px) + 6px);text-align:center;font-size:min(5.6vw,26px);pointer-events:none!important}
 .op-tap{position:absolute;left:0;right:0;bottom:14vh;text-align:center;font-size:min(9vw,46px);animation:oppulse 1.2s ease-in-out infinite;pointer-events:none!important;transition:opacity .3s}
 @keyframes oppulse{50%{transform:scale(1.07);opacity:.85}}
 .op-menu{position:absolute;left:50%;bottom:-70vh;transform:translateX(-50%);width:min(92vw,420px);display:flex;flex-direction:column;gap:14px;transition:bottom .55s cubic-bezier(.3,1.4,.5,1)}
@@ -18,7 +18,7 @@ const css = `
 .op-status{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:15px;pointer-events:none!important}
 .op-how{display:grid;gap:10px}.op-how div{display:flex;gap:10px;align-items:flex-start;background:#eef6ff;border-radius:16px;padding:8px 12px}
 .op-how b{font-weight:400;display:inline-block;color:#fff;border-radius:10px;padding:0 8px 2px;margin-right:4px}
-@media (max-height:620px){.op-logo{top:4vh;font-size:min(20vw,110px)}.op-sub{top:calc(4vh + min(20vw,110px) + 4px)}.op-menu.on{bottom:4vh}.op-menu .b.big{font-size:30px}}
+@media (max-height:620px){.op-logo{top:4vh;font-size:min(17vw,110px)}.op-sub{top:calc(4vh + min(17vw,110px) + 4px)}.op-menu.on{bottom:4vh}.op-menu .b.big{font-size:30px}}
 `;
 const SOUND_ON = '<svg viewBox="0 0 24 24" fill="#24304a"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="#24304a" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>';
 const SOUND_OFF = '<svg viewBox="0 0 24 24" fill="#24304a"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6" stroke="#24304a" stroke-width="2.4" stroke-linecap="round"/></svg>';
@@ -48,7 +48,7 @@ export async function enter(ctx) {
   const L = ui.layer('op');
   L.innerHTML = `
     <div class="op-top"><button class="ic" data-a="mute" title="Sound">${sfx.muted ? SOUND_OFF : SOUND_ON}</button></div>
-    <div class="op-logo"><span>P</span><span>o</span><span>p</span><span>o</span></div>
+    <div class="op-logo"><span>P</span><span>a</span><span>w</span><span>t</span><span>y</span></div>
     <div class="op-sub o">Tiny games for friends &amp; couples</div>
     <div class="op-tap o">Tap to Start</div>
     <div class="op-menu"></div>
