@@ -158,7 +158,7 @@
   .bd-count{top:13vh}
   .bd-res h2{font-size:32px}.bd-res table{font-size:14px}.bd-res th{font-size:10px}
 }
-.bd-ready *,.bd-count *,.bd-banner *,.bd-podium *,.bd-res *{pointer-events:none!important}
+.bd-back,.bd-ready *,.bd-count *,.bd-banner *,.bd-podium *,.bd-res *{pointer-events:none!important}
 .bd-ready,.bd-count,.bd-banner,.bd-podium{pointer-events:none!important}
 .bd-res{pointer-events:none!important}
 .bd.final > :not(.bd-podium):not(.bd-back){display:none!important}

@@ -110,9 +110,11 @@ async function startLevel(d) {
   own = drives() && sp ? { x: sp[1], z: sp[2], a: sp[3], v: 0, lat: 0 } : null;
   hud.setLevel(st, me); syncRole();
   camSnap = true; driverView = null;
-  if (podium) { podium.dispose(); podium = null; L.classList.remove('final'); }
+  if (podium) { podium.dispose(); podium = null; }
+  L.classList.remove('final'); // also clears a stale podium build's class
   ov.close();
-  engine.setScene(world.scene);
+  // rejoining during the final: the replayed `final` message swaps in the podium, so skip the race scene
+  if (d.ph === 'final') L.classList.add('final'); else engine.setScene(world.scene);
   if (d.ph === 'ready') ov.getReady(d.level, d.levels, d.theme, st.teams.map(t => ({ id: t.id, name: t.name, driver: nameOf(t.driver), callers: t.members.filter(m => m !== t.driver).map(nameOf) })), me);
   ctx.app.loaded(); ctx.ui.reveal();
   building = null;

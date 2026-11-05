@@ -8,6 +8,15 @@ import { TEAM_COL } from './car.js';
 const MAP_NAME = { country: 'Country Road', snow: 'Snowy Pass', beach: 'Beach Town', night: 'Night City' };
 const PLACE = ['1st', '2nd', '3rd', '4th'];
 const STEP_H = [1.6, 1.1, .7];
+// Free what the podium itself created (procedural meshes). Cached Kenney model geometry/materials are shared and stay.
+const OWN = new Set(['BoxGeometry', 'CylinderGeometry', 'SphereGeometry']);
+function freeScene(scene) {
+  scene.traverse(o => {
+    if (!o.isMesh || !OWN.has(o.geometry.type)) return;
+    o.geometry.dispose();
+    for (const m of [].concat(o.material)) m.dispose();
+  });
+}
 const colOf = id => TEAM_COL[id] || TEAM_COL[0];
 
 export class Overlays {
@@ -105,10 +114,10 @@ export class Overlays {
         p.root.position.set(x + (k - (n - 1) / 2) * .85, hgt, 0); p.play('dance'); scene.add(p.root); pets.push(p);
       });
     }
-    if (!alive()) { pets.forEach(p => p.dispose()); return null; }
+    if (!alive()) { pets.forEach(p => p.dispose()); freeScene(scene); return null; }
     const winners = rows.filter(r => r.rank === 1 && r.total > 0).map(r => name(r.team));
     const title = !winners.length ? 'No winner this time' : winners.length === 1 ? `${winners[0]} team wins!` : `${winners.join(' and ')} win!`;
-    const L = h(`<div class="bd-podium"><h2>${esc(title)}</h2><div class="rest">${rows.map(r => `<span class="chip${r.team === this.me.team ? ' mine' : ''}"><i style="background:${colOf(r.team)}"></i>${r.rank}. ${esc(name(r.team))} · ${r.total}</span>`).join('')}</div></div>`);
+    const L = h(`<div class="bd-podium"><h2>${esc(title)}</h2>${rows.length > 3 ? `<div class="rest">${rows.slice(3).map(r => `<span class="chip${r.team === this.me.team ? ' mine' : ''}"><i style="background:${colOf(r.team)}"></i>${r.rank}. ${esc(name(r.team))} · ${r.total}</span>`).join('')}</div>` : ''}</div>`);
     this.L.appendChild(L);
     const back = h('<div class="chip bd-back" style="padding:6px 16px 8px;font-size:18px">Back to the lobby in a moment...</div>'); this.L.appendChild(back);
     this.sfx.win();
@@ -120,7 +129,7 @@ export class Overlays {
         const cam = engine.camera, half = Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect), dist = Math.max(11, 5.1 / Math.tan(half));
         cam.position.set(Math.sin(t * .2) * 1.2, 3.6 + (dist - 11) * .35, dist); cam.lookAt(0, 1.4 + (dist - 11) * .12, 0);
       },
-      dispose: () => { for (const p of pets) p.dispose(); L.remove(); back.remove(); },
+      dispose: () => { for (const p of pets) p.dispose(); freeScene(scene); L.remove(); back.remove(); },
     };
   }
 }
