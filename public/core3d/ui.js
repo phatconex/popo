@@ -80,3 +80,21 @@ export function emoteControl(parent, onPick) {
   parent.append(b, p);
   return { button: b, panel: p };
 }
+
+// Iris transition between screens: cover() closes a circle of colour over everything, reveal() opens it again.
+let wipeEl = null;
+function wipe() {
+  if (!wipeEl) { wipeEl = h('<div id="wipe"><div class="paw"></div></div>'); document.body.appendChild(wipeEl); }
+  return wipeEl;
+}
+export function cover(ms = 380) {
+  const w = wipe();
+  if (w.classList.contains('closed')) return Promise.resolve();
+  w.classList.remove('opening'); void w.offsetWidth; w.classList.add('closing');
+  return new Promise(r => setTimeout(() => { w.classList.add('closed'); r(); }, ms));
+}
+export function reveal() {
+  const w = wipe();
+  if (!w.classList.contains('closed')) return;
+  w.classList.remove('closing', 'closed'); void w.offsetWidth; w.classList.add('opening');
+}

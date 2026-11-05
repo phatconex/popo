@@ -82,7 +82,12 @@ export class Entities {
     if (ent.seeker) {
       const col = this.colors(ent.seeker.id);
       add(ring(col, .46)); add(waterGun());
-      ent.tagEl = tag(root, `<span class="nametag" style="background:${col}">${ent.seeker.name}</span>`, { y: 1.2 });
+      const hat = new THREE.Group(), hm = new THREE.MeshStandardMaterial({ color: col, roughness: .5 });
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(.17, .34, 14), hm); cone.position.y = .17;
+      const pom = new THREE.Mesh(new THREE.SphereGeometry(.06, 10, 8), new THREE.MeshStandardMaterial({ color: '#ffffff' })); pom.position.y = .36;
+      const band = new THREE.Mesh(new THREE.TorusGeometry(.16, .03, 6, 18), new THREE.MeshStandardMaterial({ color: '#ffffff' })); band.rotation.x = Math.PI / 2; band.position.y = .02;
+      hat.add(cone, pom, band); hat.position.set(0, .86, .02); hat.rotation.z = -.18; hat.traverse(m => { if (m.isMesh) m.castShadow = true; }); add(hat);
+      ent.tagEl = tag(root, `<span class="nametag" style="background:${col}">${ent.seeker.name}</span>`, { y: 1.5 });
     } else if (ent.key === this.ownKey) {
       add(ring('#ffffff', .4)).userData.self = true;
       ent.tagEl = tag(root, '<span class="nametag hs-self" style="background:#4fb4ff">You</span>', { y: 1.08 });

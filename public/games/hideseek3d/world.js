@@ -2,7 +2,8 @@
 // 1 world unit = 100 server units; server (x, y) → world (x, z).
 import * as THREE from 'three';
 import { makeScene } from '../../core3d/engine.js';
-import { prop, fitted, instanced, loadModel } from '../../core3d/assets.js';
+import { prop, fitted, instanced, loadModel, brighten } from '../../core3d/assets.js';
+import { makeAmbient, sway } from './ambient.js';
 
 export const U = .01;
 
@@ -10,7 +11,7 @@ const THEME = {
   farm: {
     sky: '#8fd8ff', ground: '#86d65f', patchA: '#7bcc55', patchB: '#93dd6a', path: '#d9b27a', water: '#4cc3ef', rim: '#c9a36b', hemi: '#6fae5a', outside: '#78c452',
     trees: [['nature/tree_oak.glb', 3.2], ['nature/tree_fat.glb', 2.8], ['nature/tree_default.glb', 3.3], ['nature/tree_detailed.glb', 3.1]],
-    bushes: [['nature/plant_bushLarge.glb', .95], ['nature/plant_bushDetailed.glb', .85], ['nature/plant_bush.glb', .7], ['nature/plant_bushLargeTriangle.glb', .95]],
+    bushes: [['nature/plant_bushLarge.glb', .95], ['nature/plant_bush.glb', .75], ['nature/plant_bushSmall.glb', .6], ['nature/plant_bushLarge.glb', .85]],
     props: [['survival/barrel.glb', .5], ['survival/box-large.glb', .45], ['nature/log_stackLarge.glb', .42], ['survival/resource-wood.glb', .32]],
     rocks: [['nature/rock_smallA.glb', .3], ['nature/rock_smallB.glb', .3], ['nature/stump_round.glb', .3], ['nature/mushroom_redGroup.glb', .3]],
     decor: [['nature/flower_redA.glb', .35, 70], ['nature/flower_yellowA.glb', .35, 70], ['nature/flower_purpleA.glb', .35, 50], ['nature/grass_large.glb', .4, 140], ['nature/mushroom_red.glb', .3, 20]],
@@ -19,7 +20,7 @@ const THEME = {
   snow: {
     sky: '#bfe6ff', ground: '#f3f7ff', patchA: '#e3ecf8', patchB: '#ffffff', path: '#c9d6e6', water: '#a8dcf2', rim: '#dbe7f3', hemi: '#c8d8ea', outside: '#eef4ff',
     trees: [['platformer/tree-pine-snow.glb', 3.5], ['nature/tree_pineRoundA.glb', 3.2], ['platformer/tree-snow.glb', 3.1], ['nature/tree_pineTallA.glb', 3.6]],
-    bushes: [['platformer/tree-pine-snow-small.glb', 1], ['nature/plant_bushDetailed.glb', .85], ['nature/plant_bushLarge.glb', .9], ['nature/tree_pineSmallA.glb', 1]],
+    bushes: [['platformer/tree-pine-snow-small.glb', 1], ['nature/plant_bush.glb', .75], ['nature/plant_bushLarge.glb', .9], ['nature/tree_pineSmallA.glb', 1]],
     props: [['holiday/present-a-cube.glb', .4], ['holiday/present-b-rectangle.glb', .38], ['holiday/lantern.glb', .8], ['holiday/rocks-medium.glb', .4]],
     rocks: [['holiday/rocks-small.glb', .3], ['nature/stone_smallA.glb', .3], ['holiday/candy-cane-red.glb', .55], ['holiday/candy-cane-green.glb', .55]],
     decor: [['holiday/rocks-small.glb', .25, 40], ['nature/grass_large.glb', .35, 30], ['holiday/snow-pile.glb', .3, 35]],
@@ -28,7 +29,7 @@ const THEME = {
   beach: {
     sky: '#8fdcff', ground: '#f2d9a0', patchA: '#ead09a', patchB: '#f7e2b0', path: '#d9b27a', water: '#3cc6e8', rim: '#e9cf98', hemi: '#e8cf9a', outside: '#efd59c',
     trees: [['pirate/palm-straight.glb', 3.7], ['pirate/palm-bend.glb', 3.4], ['nature/tree_palmTall.glb', 3.8], ['pirate/palm-detailed-straight.glb', 3.6]],
-    bushes: [['pirate/grass-plant.glb', .7], ['pirate/patch-sand-foliage.glb', .5], ['nature/plant_bushLarge.glb', .9], ['nature/plant_bushTriangle.glb', .8]],
+    bushes: [['pirate/grass-plant.glb', .7], ['pirate/patch-sand-foliage.glb', .5], ['nature/plant_bushLarge.glb', .9], ['nature/plant_bush.glb', .75]],
     props: [['pirate/barrel.glb', .5], ['pirate/crate.glb', .45], ['pirate/chest.glb', .38], ['pirate/crate-bottles.glb', .45]],
     rocks: [['pirate/rocks-sand-a.glb', .3], ['pirate/rocks-sand-b.glb', .3], ['pirate/rocks-sand-c.glb', .3], ['pirate/bottle.glb', .3]],
     decor: [['pirate/grass-plant.glb', .35, 45], ['pirate/rocks-sand-a.glb', .18, 30], ['nature/grass_large.glb', .3, 30]],
@@ -149,7 +150,8 @@ export async function buildWorld(map, quality) {
   const T = THEME[map.theme] || THEME.farm, r = mulberry(map.seed || 1);
   const W = map.W * U, H = map.H * U;
   const scene = makeScene({ sky: T.sky, fog: [26, 58], ground: T.hemi });
-  const jobs = [], spinners = [], water = [];
+  const jobs = [], spinners = [], water = [], foams = [], wind = { uTime: { value: 0 } };
+  await Promise.all([...T.trees, ...T.bushes, ...T.decor, T.border].map(([f]) => brighten(f)));
   // ground (extends past the map edge) + soft colour patches
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(W + 60, H + 60), mat(T.outside, { roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(W / 2, -.01, H / 2); ground.receiveShadow = true; scene.add(ground);
@@ -175,18 +177,20 @@ export async function buildWorld(map, quality) {
   // sea (beach)
   for (const s of map.seas) {
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(W + 80, 60), mat(T.water, { roughness: .2, metalness: .1 })); sea.rotation.x = -Math.PI / 2; sea.position.set(W / 2, .03, s.y * U + 30); scene.add(sea); water.push(sea);
-    const foam = new THREE.Mesh(new THREE.PlaneGeometry(W + 80, .35), mat('#ffffff')); foam.rotation.x = -Math.PI / 2; foam.position.set(W / 2, .04, s.y * U + .1); scene.add(foam);
+    for (let i = 0; i < 2; i++) { const foam = new THREE.Mesh(new THREE.PlaneGeometry(W + 80, .3), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: .9 })); foam.rotation.x = -Math.PI / 2; foam.position.set(W / 2, .045 + i * .002, s.y * U + .1); foam.userData.z0 = s.y * U + .1; foam.userData.ph = i * Math.PI; scene.add(foam); foams.push(foam); }
     jobs.push(fitted('pirate/structure-platform-dock.glb', 1.6).then(o => { o.position.set(W * .55, 0, s.y * U + .9); scene.add(o); }));
   }
   // patches: fields / gardens / beach corners
   for (const f of map.patches) {
     const x = f.x * U, z = f.y * U, w = f.w * U, d = f.h * U;
     if (map.theme === 'farm') {
-      const soil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat('#b98557', { roughness: 1 })); soil.rotation.x = -Math.PI / 2; soil.position.set(x + w / 2, .015, z + d / 2); soil.receiveShadow = true; scene.add(soil);
+      const soil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat('#d2a46c', { roughness: 1 })); soil.rotation.x = -Math.PI / 2; soil.position.set(x + w / 2, .015, z + d / 2); soil.receiveShadow = true; scene.add(soil);
+      for (let iz = .6; iz < d; iz += 1.2) { const fur = new THREE.Mesh(new THREE.BoxGeometry(w - .3, .03, .34), mat('#b88454', { roughness: 1 })); fur.position.set(x + w / 2, .02, z + iz); fur.receiveShadow = true; scene.add(fur); }
       const crops = ['nature/crop_pumpkin.glb', 'nature/crops_cornStageD.glb', 'nature/crop_carrot.glb', 'nature/crops_wheatStageB.glb', 'nature/crop_melon.glb', 'nature/crop_turnip.glb'];
       const c = crops[f.kind % crops.length], list = [];
       for (let ix = .6; ix < w; ix += 1.2) for (let iz = .6; iz < d; iz += 1.2) list.push({ x: x + ix, z: z + iz, ry: r() * 6.3, s: .85 + r() * .3 });
-      jobs.push(instanced(c, c.includes('corn') || c.includes('wheat') ? .8 : .4, list).then(g => scene.add(g)));
+      const tall = c.includes('corn') || c.includes('wheat');
+      jobs.push(brighten(c, .05, .06).then(() => instanced(c, tall ? .8 : .4, list)).then(g => scene.add(tall ? sway(g, wind, .1) : g)));
     } else if (map.theme === 'snow') {
       const pad = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(f.kind % 2 ? '#bfe4f7' : '#ffffff', { roughness: f.kind % 2 ? .2 : 1 })); pad.rotation.x = -Math.PI / 2; pad.position.set(x + w / 2, .015, z + d / 2); scene.add(pad);
       const list = []; for (let i = 0; i < 10; i++) list.push({ x: x + .4 + r() * (w - .8), z: z + .4 + r() * (d - .8), ry: r() * 6.3 });
@@ -231,7 +235,7 @@ export async function buildWorld(map, quality) {
   for (const [path, h, n] of T.decor) {
     const list = [];
     for (let i = 0; i < n * scale; i++) { const x = r() * W, z = r() * H; if (!blocked(x, z)) list.push({ x, z, ry: r() * 6.3, s: .7 + r() * .6 }); }
-    jobs.push(instanced(path, h, list).then(g => scene.add(g)));
+    jobs.push(instanced(path, h, list).then(g => scene.add(/grass|flower/.test(path) ? sway(g, wind, .16) : g)));
   }
   // fence around the map (beach: no fence on the sea side) + trees outside it
   const fl = [], step = 1.15, seaTop = map.seas.length ? map.seas[0].y * U : null;
@@ -253,15 +257,19 @@ export async function buildWorld(map, quality) {
   coverList(map.bushes, T.bushes).forEach((list, k) => jobs.push(covers.add(T.bushes[k][0], T.bushes[k][1], list, .6, false)));
 
   await Promise.all(jobs);
+  const ambient = makeAmbient(map.theme, scene, quality && quality.mobile);
+  if (seaTop != null) ambient.seaTop = seaTop;
   let t = 0;
   return {
     scene, covers, W, H,
-    tick(dt) {
-      t += dt;
+    tick(dt, focus) {
+      t += dt; wind.uTime.value = t;
+      if (focus) ambient.tick(dt, focus);
+      for (const f of foams) { const k = Math.sin(t * 1.3 + f.userData.ph); f.position.z = f.userData.z0 + .25 + k * .25; f.material.opacity = .45 + .45 * Math.max(0, -k); f.scale.y = 1 + (1 + k) * .8; }
       for (const s of spinners) s.spin.rotation[s.spinAxis || 'z'] += dt * (s.spinAxis ? 1.2 : .9);
       for (const w of water) w.material.color.offsetHSL(0, 0, Math.sin(t * 1.5) * .0006);
     },
-    dispose() { scene.traverse(o => { if (o.isMesh && o.geometry && !o.isInstancedMesh) o.geometry.dispose(); }); },
+    dispose() { ambient.dispose(); scene.traverse(o => { if (o.isMesh && o.geometry && !o.isInstancedMesh) o.geometry.dispose(); }); },
   };
 }
 

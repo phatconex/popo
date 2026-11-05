@@ -13,6 +13,7 @@ export const ACTS = {
   hider: [['run', 'Run', 'Shift'], ['swap', 'Swap', 'E'], ['say', 'Call', 'Q'], ['sleep', 'Sleep', 'Z'], ['decoy', 'Decoy', 'F']],
   seeker: [['listen', 'Listen', 'R']],
 };
+export const COOLDOWN = { say: 8, sleep: 25, decoy: 20, listen: 25 };
 export const KEYMAP = { ShiftLeft: 'run', ShiftRight: 'run', KeyE: 'swap', KeyQ: 'say', KeyZ: 'sleep', KeyF: 'decoy', KeyR: 'listen' };
 
 export class Hud {
@@ -56,18 +57,19 @@ export class Hud {
       : 'WASD to move · <b>click to squirt water</b> · R listen. Hitting a real animal costs water!';
     const box = this.$('.hs-acts'); box.innerHTML = ''; this.btns = {};
     if (!alive) return;
-    for (const [id, label, key] of ACTS[role]) {
-      const b = h(`<button class="hs-act a-${id}">${ICON[id]}<span>${label}</span><kbd>${key}</kbd><div class="cd"></div></button>`);
+    ACTS[role].forEach(([id, label, key], i) => {
+      const b = h(`<button class="hs-act a-${id}" style="animation-delay:${i * .06}s">${ICON[id]}<span>${label}</span><kbd>${key}</kbd><div class="cd"></div></button>`);
       b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (id === 'run') { this.runHeld = true; b.classList.add('held'); } else this.onAction(id); });
       if (id === 'run') for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => { this.runHeld = false; b.classList.remove('held'); });
       box.appendChild(b); this.btns[id] = b;
-    }
+    });
   }
 
   update(s) {
     const me = s.me;
     this.setRole(me.role, me.alive);
     this.$('.ph').textContent = s.ph === 'hiding' ? 'HIDE!' : s.fz ? 'FRENZY!' : 'TIME LEFT';
+    this.$('.hs-timer').classList.toggle('hide', s.ph === 'hiding' || !!s.fz);
     this.$('.tm').textContent = Math.floor(s.tm / 60) + ':' + String(s.tm % 60).padStart(2, '0');
     const dots = this.$('.hs-dots');
     if (dots.childElementCount !== s.ht || dots.dataset.hl !== String(s.hl)) {
@@ -78,7 +80,10 @@ export class Hud {
     if (me.role === 'seeker') { const hp = this.$('.hs-hp'); hp.firstElementChild.style.width = me.hp + '%'; hp.lastElementChild.textContent = 'Water tank ' + me.hp; }
     for (const [id, b] of Object.entries(this.btns)) {
       const cd = me.cd && me.cd[id];
-      b.classList.toggle('cool', !!cd); if (cd) b.querySelector('.cd').textContent = cd;
+      const was = b.classList.contains('cool');
+      b.classList.toggle('cool', !!cd);
+      if (cd) { b.querySelector('.cd').textContent = cd; b.style.setProperty('--p', Math.min(1, cd / (COOLDOWN[id] || cd))); }
+      if (was && !cd) { b.classList.remove('ready'); void b.offsetWidth; b.classList.add('ready'); }
     }
     this.$('.hs-frenzy').classList.toggle('on', !!s.fz);
   }

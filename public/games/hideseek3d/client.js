@@ -1,7 +1,7 @@
 // Hide & Seek 3D client: builds the world from `init`, renders snapshots, sends input, shows HUD and overlays.
 import * as THREE from 'three';
 import { followSun } from '../../core3d/engine.js';
-import { ANIMALS } from '../../core3d/assets.js';
+import { ANIMALS, thumb } from '../../core3d/assets.js';
 import { buildWorld, U } from './world.js';
 import { Entities } from './entities.js';
 import { Fx, SOUND } from './fx.js';
@@ -85,7 +85,7 @@ async function startRound(d) {
     ov.roleCard(d.role, d.round, d.total, d.map.theme);
   } else ents.clear(); // same round re-sent (rejoin): rebuild entities from the next snapshot
   engine.setScene(world.scene);
-  ctx.app.loaded();
+  ctx.app.loaded(); ctx.ui.reveal();
   building = null;
   const q = queue; queue = [];
   const lastS = [...q].reverse().find(m => m.t === 's');
@@ -118,17 +118,18 @@ function handle(d) {
         fx.shot(d.x1, d.y1, d.x2, d.y2, d.hit); sfx.splash();
         if (d.hit === 1) {
           const e = ents.nearest(d.x2 * U, d.y2 * U);
-          if (e && e.pet) { fx.bubble(e.pet.root, SOUND[ANIMALS[e.code].id] || 'Hey!'); ents.play(e.key, 'gesture-negative', 1); }
-          if (d.by === net.myId) { hud.feed(d.free ? 'Frenzy! Free shot' : 'Oops! A real animal · <b style="color:#ff5d6c">−15 water</b>', '#ffd0d4'); sfx.oops(); }
+          if (e && e.pet) { fx.bubble(e.pet.root, SOUND[ANIMALS[e.code].id] || 'Hey!'); ents.play(e.key, 'gesture-negative', 1); sfx.animal(ANIMALS[e.code].id); }
+          if (d.by === net.myId && e) { const code = e.code; thumb(code).then(url => hud.feed(`<img src="${url}">` + (d.free ? 'Frenzy! Free shot' : `Oops! A real ${ANIMALS[code].name} · <b style="color:#ff5d6c">−15 water</b>`), '#ffd0d4')); sfx.oops(); }
         } else if (d.hit === 2) {
           fx.confetti(d.x2 * U, d.y2 * U, 50); sfx.caught();
           const mine = snap && snap.me.role === 'hider' && d.vid === net.myId;
-          hud.feed(mine ? `<b>${d.seeker}</b> caught you!` : `<b>${d.seeker}</b> caught <b>${d.name}</b>!`, '#ffe9a6');
+          const msg = mine ? `<b>${d.seeker}</b> caught you!` : `<b>${d.seeker}</b> caught <b>${d.name}</b>!`;
+          thumb(d.skin | 0).then(url => hud.feed(`<img src="${url}">${msg}`, '#ffe9a6'));
         }
       } else if (d.kind === 'say') {
         const e = ents.nearest(d.x * U, d.y * U);
         if (e && e.pet) fx.bubble(e.pet.root, SOUND[ANIMALS[d.skin] && ANIMALS[d.skin].id] || 'Hi!');
-        sfx.pop();
+        sfx.animal(ANIMALS[d.skin] && ANIMALS[d.skin].id);
       } else if (d.kind === 'listen') fx.ripple(d.x * U, d.y * U, '#bfe6ff', 6);
       else if (d.kind === 'down') hud.feed(`<b>${d.name}</b> ran out of water!`, '#cfe7ff');
       break;
@@ -197,7 +198,7 @@ function frame(dt, t) {
   if (firing != null && snap.fz) shoot(); // Frenzy: hold to keep squirting
   ents.tick(dt, now, cam);
   fx.tick(dt); fx.sleepers(ents);
-  world.tick(dt);
+  world.tick(dt, camT);
   // camera: my animal, or the seeker while spectating
   let focus = null;
   const mine = ents.get(myKey());

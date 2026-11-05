@@ -10,6 +10,7 @@ import * as HideSeek from './games/hideseek3d/client.js';
 
 const GAMES = { hideseek: HideSeek };
 let screen = null, screenName = '', game = null, gameId = null, routing = Promise.resolve();
+let gameQueue = null; // game messages that arrive while the game is still being mounted
 
 const app = {
   lobby: null,
@@ -24,20 +25,25 @@ const ctx = { engine, net, ui, sfx, assets, app };
 function show(name, mod, arg) {
   routing = routing.then(async () => {
     if (screenName === name && screen) { screen.update && screen.update(app.lobby); return; }
+    const fromSomewhere = !!screen || !!game;
+    if (fromSomewhere) await ui.cover();
     if (screen) { screen.leave(); screen = null; }
     screenName = name;
     screen = await mod.enter(ctx, arg);
-    app.loaded();
+    app.loaded(); ui.reveal();
   }).catch(e => { console.error(e); fatal(); });
 }
 async function mountGame(id) {
   if (gameId === id && game) return;
-  if (screen) { screen.leave(); screen = null; screenName = ''; }
+  gameQueue = gameQueue || [];
+  if (screen) { await ui.cover(); screen.leave(); screen = null; screenName = ''; }
   game = GAMES[id]; gameId = id;
   await game.mount(ctx);
+  const q = gameQueue; gameQueue = null;
+  for (const d of q) game.onMsg(d);
   app.loaded();
 }
-function unmountGame() { if (game) { game.unmount(); game = null; gameId = null; } }
+function unmountGame() { gameQueue = null; if (game) { game.unmount(); game = null; gameId = null; } }
 
 function fatal() {
   ui.modal({ title: 'Oops', body: "Couldn't load the game files. Check your connection and reload.", actions: [{ label: 'Reload', cls: 'sun', onClick: () => location.reload() }], onClose: false });
@@ -46,13 +52,14 @@ function fatal() {
 net.on('lobby', m => {
   app.lobby = m;
   if (m.state === 'playing' && GAMES[m.game]) {
+    if (!game && !gameQueue) gameQueue = [];
     routing = routing.then(() => mountGame(m.game)).then(() => game && game.onLobby && game.onLobby(m)).catch(e => { console.error(e); fatal(); });
   } else {
-    routing = routing.then(() => unmountGame());
+    routing = routing.then(async () => { if (game) { await ui.cover(); unmountGame(); } });
     show('lobby', Lobby);
   }
 });
-net.on('g', m => { if (game) game.onMsg(m.d); });
+net.on('g', m => { if (gameQueue) gameQueue.push(m.d); else if (game) game.onMsg(m.d); });
 net.on('emote', m => { const t = game || screen; t && t.onEmote && t.onEmote(m.id, m.e); });
 net.on('err', m => { const t = screen || game; if (t && t.onError) t.onError(m.msg); else ui.toast(m.msg, '#ffd0d4'); });
 const reconn = document.getElementById('reconn');

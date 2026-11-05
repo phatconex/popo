@@ -17,22 +17,24 @@ const css = `
 .lb-tag.away{opacity:.55}
 .lb-tag .m{display:inline-block;color:#fff;font-size:13px;border-radius:9px;padding:0 7px 1px;box-shadow:0 0 0 2.5px var(--ink);text-shadow:0 2px 0 rgba(20,30,50,.3)}
 .lb-empty{font-size:16px;text-align:center;line-height:1.1}
-.lb-arr{position:absolute;left:0;top:0;width:56px;height:56px;border-radius:50%;background:#fff;color:var(--ink);font-size:34px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 5px 0 var(--ink),0 0 0 4px var(--ink);cursor:pointer;padding-bottom:4px;border:0;font-family:inherit}
-.lb-arr:active{transform:translateY(4px)}
+.lb-tag .row{display:inline-flex;align-items:center;gap:8px}
+.lb-tag .ar{pointer-events:auto;width:40px;height:40px;border-radius:50%;background:#fff;color:var(--ink);font-size:28px;line-height:1;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 0 var(--ink),0 0 0 4px var(--ink);cursor:pointer;padding-bottom:3px;border:0;font-family:inherit;transition:transform .08s}
+.lb-tag .ar:active{transform:translateY(4px) scale(.95)}
+.lb-tag .m svg{width:14px;height:11px;vertical-align:-1px;margin-right:3px}
 .lb-panel{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(980px,calc(100% - 28px));background:rgba(36,48,74,.82);border-radius:26px;padding:12px;display:flex;gap:12px;align-items:stretch;box-shadow:0 6px 0 rgba(0,0,0,.25)}
 .lb-games{display:flex;gap:12px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:10px 8px 4px;margin:-10px -4px -4px}
 .lb-g{flex:1 0 170px;max-width:340px;border-radius:18px;padding:8px 12px 10px;position:relative;box-shadow:inset 0 -6px 0 rgba(0,0,0,.18),0 0 0 4px #fff,0 0 0 8px var(--ink);transform:translateY(-6px)}
 .lb-g svg{width:100%;height:64px;display:block}
 .lb-g .nm{font-size:22px;text-shadow:0 3px 0 rgba(20,30,50,.35)}
 .lb-g .pl{font-size:13px;opacity:.95}
-.lb-g.soon{opacity:.5;transform:none;box-shadow:inset 0 -6px 0 rgba(0,0,0,.18),0 0 0 3px #0e1626;flex-basis:130px}
-.lb-g.soon .nm{font-size:17px}
-.lb-side{display:flex;flex-direction:column;gap:10px;width:270px;flex:none}
+.lb-g.soon{opacity:.6;transform:none;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 0 0 3px #0e1626;flex:0 0 104px;padding:8px 10px;display:flex;flex-direction:column;justify-content:center}
+.lb-g.soon svg{display:none}.lb-g.soon .nm{font-size:15px;line-height:1.1}.lb-g.soon .pl{display:inline-block;margin-top:6px;font-size:11px;background:rgba(20,30,50,.35);border-radius:8px;padding:1px 7px;align-self:flex-start}
+.lb-side{display:flex;flex-direction:column;gap:10px;width:310px;flex:none}
 .lb-opts{display:flex;flex-direction:column;gap:8px}
 .lb-opt{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.12);border-radius:14px;padding:4px 6px 4px 12px;font-size:16px;gap:8px}
 .lb-opt .v{display:flex;align-items:center;gap:4px}
 .lb-opt i{font-style:normal;width:28px;height:28px;border-radius:9px;background:#fff;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;padding-bottom:2px}
-.lb-opt span{min-width:96px;text-align:center}
+.lb-opt span{min-width:132px;text-align:center;white-space:nowrap;font-size:15px}
 .lb-ro .lb-opt i{visibility:hidden}
 .lb-acts{display:flex;gap:10px;margin-top:auto}
 .lb-acts .b{flex:1;font-size:24px}
@@ -42,8 +44,8 @@ const css = `
 @media (max-width:760px){
   .lb-title{font-size:30px}.lb-code b{font-size:22px}.lb-code small{font-size:10px}.lb-code .b{font-size:15px}
   .lb-panel{flex-direction:column;padding:10px;gap:10px;border-radius:22px}
-  .lb-side{width:auto}.lb-g{flex:0 0 150px}.lb-g svg{height:44px}.lb-g .nm{font-size:18px}
-  .lb-opts{flex-direction:row;overflow-x:auto}.lb-opt{flex:none;font-size:14px}.lb-opt span{min-width:64px}
+  .lb-side{width:auto}.lb-g{flex:0 0 150px}.lb-g.soon{flex:0 0 96px}.lb-g svg{height:44px}.lb-g .nm{font-size:18px}
+  .lb-opts{flex-direction:row;overflow-x:auto}.lb-opt{flex:none;font-size:14px}.lb-opt span{min-width:64px;font-size:13px}
   .lb-acts .b{font-size:22px}
   .lb-empty{font-size:12px;-webkit-text-stroke-width:4px}
 }`;
@@ -71,7 +73,6 @@ export async function enter(ctx) {
   codeBox.appendChild(ui.btn('Invite', '', invite));
   L.querySelector('[data-a=back]').onclick = () => ui.modal({ title: 'Leave room?', body: 'You can join again with the room code.', actions: [{ label: 'Stay', cls: 'white' }, { label: 'Leave', cls: 'rose', onClick: () => app.leaveRoom() }] });
   ui.emoteControl(L, e => net.send({ t: 'emote', e }));
-  const arrows = [-1, 1].map(d => { const a = ui.h(`<button class="lb-arr">${d < 0 ? '‹' : '›'}</button>`); a.onclick = () => changeAnimal(d); L.appendChild(a); return [a, d]; });
 
   const slots = new Map(); // player id -> slot
   let empty = null, lobby = null, portrait = false;
@@ -103,6 +104,7 @@ export async function enter(ctx) {
       if (!s) {
         s = { id: p.id, ped: pedestal(color), code: -1 };
         s.tag = ui.tag(s.ped, '', { y: 0, below: true, cls: 'lb-tag' });
+        s.tag.el.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) changeAnimal(+b.dataset.d); });
         s.crown = ui.tag(s.ped, CROWN, { y: 2.05 });
         slots.set(p.id, s);
       }
@@ -151,12 +153,14 @@ export async function enter(ctx) {
     }
     for (const s of slots.values()) {
       const back = s.ped.userData.row > 0, p = s.p, mini = back && (portrait || rows > 1);
-      s.tag.y = back ? 2.15 * s.ped.scale.x + .1 : 0; s.tag.below = !back;
+      s.tag.y = back ? 1.95 * s.ped.scale.x : 0; s.tag.below = !back;
+      const host = lobby.host === s.id, CR = '<svg viewBox="0 0 46 34"><path d="M4 30 L2 8 L14 18 L23 3 L32 18 L44 8 L42 30 Z" fill="#ffd23f" stroke="#24304a" stroke-width="5" stroke-linejoin="round"/></svg>';
+      const name = `<span class="n">${ui.esc(p.name)} · ${ANIMALS[p.av].name}</span>`;
       s.tag.el.classList.toggle('mini', mini);
       s.tag.el.innerHTML = mini
-        ? `<span class="m" style="background:${s.color}">${p.ready ? '✓ ' : ''}${ui.esc(p.name)}</span>`
-        : `<span class="p" style="background:${s.color}">P${s.index + 1}${s.me ? ' · You' : ''}</span><br><span class="n">${ui.esc(p.name)} · ${ANIMALS[p.av].name}</span>${p.ready ? '<span class="r">✓ Ready</span>' : p.on ? '' : '<span class="r" style="color:#ffd0d4">away…</span>'}`;
-      s.crown.y = back ? 2.15 * s.ped.scale.x + .75 : 2.05 * s.ped.scale.x;
+        ? `<span class="m" style="background:${s.color}">${host ? CR : ''}${p.ready ? '✓ ' : ''}${ui.esc(p.name)}</span>`
+        : `<span class="p" style="background:${s.color}">P${s.index + 1}${s.me ? ' · You' : ''}</span><br>${s.me ? `<span class="row"><button class="ar" data-d="-1" title="Previous animal">‹</button>${name}<button class="ar" data-d="1" title="Next animal">›</button></span>` : name}${p.ready ? '<span class="r">✓ Ready</span>' : p.on ? '' : '<span class="r" style="color:#ffd0d4">away…</span>'}`;
+      s.crown.y = 1.95 * s.ped.scale.x; s.crown.el.style.display = back && mini ? 'none' : '';
     }
   }
   addEventListener('resize', layout);
@@ -168,8 +172,8 @@ export async function enter(ctx) {
     if (!box.dataset.done && g) {
       box.dataset.done = 1;
       box.innerHTML = `<div class="lb-g" style="background:#55d36b"><svg viewBox="0 0 120 62">${ART[g.id] || ''}</svg><div class="nm">${g.name}</div><div class="pl">${g.min}–${g.max} players</div></div>
-        <div class="lb-g soon" style="background:#4fb4ff"><svg viewBox="0 0 120 62">${ART.drive}</svg><div class="nm">Blind Drive</div><div class="pl">Coming soon</div></div>
-        <div class="lb-g soon" style="background:#ff8a4c"><svg viewBox="0 0 120 62">${ART.badminton}</svg><div class="nm">Critter Badminton</div><div class="pl">Coming soon</div></div>`;
+        <div class="lb-g soon" style="background:#4fb4ff"><svg viewBox="0 0 120 62">${ART.drive}</svg><div class="nm">Blind Drive</div><div class="pl">SOON</div></div>
+        <div class="lb-g soon" style="background:#ff8a4c"><svg viewBox="0 0 120 62">${ART.badminton}</svg><div class="nm">Critter Badminton</div><div class="pl">SOON</div></div>`;
     }
     const opts = L.querySelector('.lb-opts');
     opts.classList.toggle('lb-ro', !isHost);
@@ -223,7 +227,6 @@ export async function enter(ctx) {
       if (!s.pet) continue;
       s.pet.mixer.update(dt);
       if (s.pop > 0) { s.pop = Math.max(0, s.pop - dt * 4); const q = 1 + Math.sin(s.pop * Math.PI) * .25; s.pet.root.scale.set(q, 1.2 - .2 * q, q); }
-      if (s.me) for (const [a, d] of arrows) { const sc = s.ped.scale.x; v.set(s.ped.position.x + d * 1.35 * sc, .9 * sc, s.ped.position.z).project(cam); a.style.transform = `translate(${(v.x * .5 + .5) * innerWidth - 28}px,${(-v.y * .5 + .5) * innerHeight - 28}px)`; }
     }
     if (empty) empty.ped.userData.hl.material.opacity = .3 + Math.sin(t * 3) * .25;
   });

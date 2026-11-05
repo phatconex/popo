@@ -5,6 +5,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff;font-family:'L
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 #ui,#tags{position:fixed;inset:0;pointer-events:none}
 #tags{z-index:1}#ui{z-index:2}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 58%,rgba(20,30,60,.28) 100%)}
 .layer{position:absolute;inset:0;pointer-events:none}
 .layer *{pointer-events:auto}
 .layer .pass,.layer .pass *{pointer-events:none}
@@ -67,3 +68,13 @@ input,textarea{font-family:'Lilita One',system-ui,sans-serif}
 .emote-panel button{width:52px;height:52px;border:0;background:#eef3fb;border-radius:14px;cursor:pointer;padding:4px}
 .emote-panel svg,.emote svg{width:100%;height:100%}
 .emote{width:46px;height:46px;animation:bub 1.8s ease-out forwards}
+/* iris transition */
+#wipe{position:fixed;inset:0;z-index:28;pointer-events:none;background:#ffc727;clip-path:circle(0% at 50% 50%)}
+#wipe.closing{animation:irisIn .38s cubic-bezier(.6,0,.4,1) forwards;pointer-events:auto}
+#wipe.closed{clip-path:circle(150% at 50% 50%);pointer-events:auto}
+#wipe.opening{animation:irisOut .5s cubic-bezier(.6,0,.4,1) forwards}
+#wipe .paw{position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px;opacity:0;transition:opacity .2s;background:radial-gradient(circle at 50% 66%,#24304a 26%,transparent 27%),radial-gradient(circle at 22% 38%,#24304a 11%,transparent 12%),radial-gradient(circle at 78% 38%,#24304a 11%,transparent 12%),radial-gradient(circle at 38% 18%,#24304a 11%,transparent 12%),radial-gradient(circle at 62% 18%,#24304a 11%,transparent 12%)}
+#wipe.closed .paw{opacity:1;animation:pawbob .6s ease-in-out infinite alternate}
+@keyframes irisIn{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(150% at 50% 50%)}}
+@keyframes irisOut{from{clip-path:circle(150% at 50% 50%)}to{clip-path:circle(0% at 50% 50%)}}
+@keyframes pawbob{to{transform:translateY(-10px) rotate(8deg)}}

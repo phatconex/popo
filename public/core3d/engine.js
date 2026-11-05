@@ -14,6 +14,7 @@ try {
 }
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
 renderer.shadowMap.enabled = quality.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 quality.pr = Math.min(devicePixelRatio || 1, quality.maxPR);
@@ -60,8 +61,8 @@ export function makeScene({ sky = '#8fd8ff', fog = [30, 70], ground = '#6fae5a' 
   const s = new THREE.Scene();
   s.background = new THREE.Color(sky);
   if (fog) s.fog = new THREE.Fog(sky, fog[0], fog[1]);
-  s.add(new THREE.HemisphereLight('#ffffff', ground, 1.15));
-  const sun = new THREE.DirectionalLight('#fff3d6', 2.2);
+  s.add(new THREE.HemisphereLight('#e8f6ff', ground, 1.55));
+  const sun = new THREE.DirectionalLight('#fff0cf', 2.5);
   sun.position.set(8, 16, 10);
   if (quality.shadows) {
     sun.castShadow = true;

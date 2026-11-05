@@ -37,6 +37,15 @@ export async function prop(path, height, opts = {}) {
   return root;
 }
 
+// Lighten/saturate a model's own materials once (Kenney greens read too dark under our lights).
+const tinted = new Set();
+export async function brighten(path, light = .07, sat = .05) {
+  if (tinted.has(path)) return;
+  tinted.add(path);
+  const g = await loadModel(path);
+  g.scene.traverse(m => { if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => mt.color && mt.color.offsetHSL(0, sat, light)); });
+}
+
 // A static prop scaled so its widest horizontal side equals `size` (world units).
 export async function fitted(path, size, opts = {}) {
   const g = await loadModel(path);
@@ -103,4 +112,29 @@ export async function instanced(path, height, list, opts = {}) {
     group.add(im);
   });
   return group;
+}
+
+// Small portrait images of animals (data URLs), rendered once with a tiny offscreen renderer.
+let thumbR = null, thumbScene = null, thumbCam = null;
+const thumbs = new Map();
+export function thumb(code) {
+  if (thumbs.has(code)) return thumbs.get(code);
+  const job = (async () => {
+    if (!thumbR) {
+      thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      thumbR.setSize(96, 96); thumbR.outputColorSpace = THREE.SRGBColorSpace;
+      thumbScene = new THREE.Scene();
+      thumbScene.add(new THREE.HemisphereLight('#ffffff', '#99aabb', 2.2));
+      const d = new THREE.DirectionalLight('#ffffff', 1.6); d.position.set(2, 3, 4); thumbScene.add(d);
+      thumbCam = new THREE.PerspectiveCamera(30, 1, .1, 20); thumbCam.position.set(0, .75, 2.6); thumbCam.lookAt(0, .45, 0);
+    }
+    const p = await pet(code, .95);
+    p.root.rotation.y = .5; thumbScene.add(p.root);
+    thumbR.render(thumbScene, thumbCam);
+    const url = thumbR.domElement.toDataURL('image/png');
+    p.dispose();
+    return url;
+  })();
+  thumbs.set(code, job);
+  return job;
 }

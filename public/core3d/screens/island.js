@@ -1,7 +1,7 @@
 // A round grass island with trees and flowers — shared backdrop for the Open and Lobby screens.
 import * as THREE from 'three';
 import { makeScene } from '../engine.js';
-import { prop, instanced } from '../assets.js';
+import { prop, instanced, brighten } from '../assets.js';
 
 export async function island({ radius = 12, trees = 22, ring = [9, 11.4], arc = null, seed = 4 } = {}) {
   const scene = makeScene({ sky: '#8fd8ff', fog: [24, 60] });
@@ -10,7 +10,8 @@ export async function island({ radius = 12, trees = 22, ring = [9, 11.4], arc = 
   top.position.y = -.5; top.receiveShadow = true; scene.add(top);
   const dirt = new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.03, radius * .72, 3, 64), new THREE.MeshStandardMaterial({ color: '#b5784a', roughness: 1 }));
   dirt.position.y = -2.5; scene.add(dirt);
-  const T = [['nature/tree_oak.glb', 3], ['nature/tree_fat.glb', 2.6], ['nature/tree_default.glb', 3.1], ['nature/tree_pineRoundA.glb', 3], ['nature/plant_bushLarge.glb', 1], ['nature/tree_blocks.glb', 2.8], ['nature/rock_largeA.glb', 1.1]];
+  const T = [['nature/tree_oak.glb', 3], ['nature/tree_fat.glb', 2.6], ['nature/tree_default.glb', 3.1], ['nature/tree_pineRoundA.glb', 3], ['nature/plant_bushLarge.glb', 1], ['nature/tree_blocks.glb', 2.8], ['nature/plant_bushDetailed.glb', .9]];
+  await Promise.all(T.map(([f]) => brighten(f)));
   const jobs = [];
   for (let i = 0; i < trees; i++) {
     const a = arc ? arc[0] + (i / (trees - 1)) * (arc[1] - arc[0]) + (rnd() - .5) * .15 : i / trees * 6.28 + rnd() * .2;
