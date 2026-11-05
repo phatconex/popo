@@ -190,7 +190,7 @@ export async function buildWorld(map, quality) {
       const c = crops[f.kind % crops.length], list = [];
       for (let ix = .6; ix < w; ix += 1.2) for (let iz = .6; iz < d; iz += 1.2) list.push({ x: x + ix, z: z + iz, ry: r() * 6.3, s: .85 + r() * .3 });
       const tall = c.includes('corn') || c.includes('wheat');
-      jobs.push(brighten(c, .05, .06).then(() => instanced(c, tall ? .8 : .4, list)).then(g => scene.add(tall ? sway(g, wind, .1) : g)));
+      jobs.push(brighten(c).then(() => instanced(c, tall ? .8 : .4, list)).then(g => scene.add(tall ? sway(g, wind, .1) : g)));
     } else if (map.theme === 'snow') {
       const pad = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(f.kind % 2 ? '#bfe4f7' : '#ffffff', { roughness: f.kind % 2 ? .2 : 1 })); pad.rotation.x = -Math.PI / 2; pad.position.set(x + w / 2, .015, z + d / 2); scene.add(pad);
       const list = []; for (let i = 0; i < 10; i++) list.push({ x: x + .4 + r() * (w - .8), z: z + .4 + r() * (d - .8), ry: r() * 6.3 });

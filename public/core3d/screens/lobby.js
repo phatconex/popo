@@ -28,6 +28,7 @@ const css = `
 .lb-g .nm{font-size:22px;text-shadow:0 3px 0 rgba(20,30,50,.35)}
 .lb-g .pl{font-size:13px;opacity:.95}
 .lb-g.soon{opacity:.6;transform:none;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 0 0 3px #0e1626;flex:0 0 104px;padding:8px 10px;display:flex;flex-direction:column;justify-content:center}
+.lb-g.pick{cursor:pointer;opacity:.85}.lb-g.pick:hover{opacity:1}.lb-g.pick:active{transform:translateY(3px)}
 .lb-g.soon svg{display:none}.lb-g.soon .nm{font-size:15px;line-height:1.1}.lb-g.soon .pl{display:inline-block;margin-top:6px;font-size:11px;background:rgba(20,30,50,.35);border-radius:8px;padding:1px 7px;align-self:flex-start}
 .lb-side{display:flex;flex-direction:column;gap:10px;width:310px;flex:none}
 .lb-opts{display:flex;flex-direction:column;gap:8px}
@@ -43,14 +44,15 @@ const css = `
 .lb-wait{flex:1;display:flex;align-items:center;justify-content:center;font-size:17px;opacity:.9;text-align:center}
 .lb-panel.tm{flex-wrap:wrap}
 .lb-teams{flex:none;width:100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.lb-team{border-radius:16px;padding:6px 8px 8px;display:flex;flex-direction:column;gap:5px;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 0 0 3px var(--ink);min-width:0}
+.lb-team{border-radius:16px;padding:5px 6px 7px 10px;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 0 0 3px var(--ink);min-width:0}
+.lb-team .hd{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
 .lb-team .tn{font-size:20px;text-shadow:0 2px 0 rgba(20,30,50,.35)}
-.lb-team .tc{display:flex;flex-direction:column;gap:4px;min-height:96px}
+.lb-team .tc{display:flex;flex-direction:column;gap:6px;padding:0 2px 2px 0}.lb-team .tc:empty{display:none}
 .lb-team .ch{display:flex;align-items:center;gap:6px;background:#fff;color:var(--ink);border-radius:10px;box-shadow:0 0 0 3px var(--ink);padding:1px 6px 1px 2px;font-size:14px;min-width:0;height:30px}
 .lb-team .ch img{width:26px;height:26px;border-radius:8px;flex:none}
 .lb-team .ch span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-team .b{font-size:16px;padding:3px 8px 5px}
-@media (max-width:560px){.lb-teams{grid-template-columns:repeat(2,1fr);gap:8px}.lb-team .tc{min-height:0}.lb-team .tn{font-size:17px}.lb-team .ch{height:26px;font-size:12px}.lb-team .ch img{width:22px;height:22px}}
+.lb-team .b{font-size:15px;padding:2px 10px 4px;border-radius:12px}
+@media (max-width:560px){.lb-teams{grid-template-columns:repeat(2,1fr);gap:8px}.lb-team .tn{font-size:17px}.lb-team .ch{height:26px;font-size:12px}.lb-team .ch img{width:22px;height:22px}}
 @media (max-width:760px){
   .lb-title{font-size:30px}.lb-code b{font-size:22px}.lb-code small{font-size:10px}.lb-code .b{font-size:15px}
   .lb-panel{flex-direction:column;padding:10px;gap:10px;border-radius:22px}
@@ -61,9 +63,10 @@ const css = `
 }`;
 const ART = {
   hideseek: '<rect x="6" y="34" width="108" height="24" rx="6" fill="#3fa94f"/><circle cx="30" cy="30" r="18" fill="#2f8c40"/><circle cx="46" cy="24" r="14" fill="#2f8c40"/><rect x="74" y="20" width="26" height="22" rx="4" fill="#d9a35b" stroke="#24304a" stroke-width="3"/><circle cx="40" cy="36" r="5" fill="#fff"/><circle cx="41" cy="36" r="2.4" fill="#24304a"/><path d="M96 44 l14 -6" stroke="#4fb4ff" stroke-width="4" stroke-linecap="round"/>',
-  drive: '<rect x="44" y="0" width="32" height="62" fill="#4b4f63"/><rect x="58" y="4" width="4" height="10" fill="#fff"/><rect x="58" y="24" width="4" height="10" fill="#fff"/><rect x="48" y="30" width="18" height="26" rx="5" fill="#ff5d6c" stroke="#24304a" stroke-width="3"/>',
+  blinddrive: '<rect x="44" y="0" width="32" height="62" fill="#4b4f63"/><rect x="58" y="4" width="4" height="10" fill="#fff"/><rect x="58" y="24" width="4" height="10" fill="#fff"/><rect x="48" y="30" width="18" height="26" rx="5" fill="#ff5d6c" stroke="#24304a" stroke-width="3"/>',
   badminton: '<rect x="0" y="48" width="120" height="14" fill="#3fa94f"/><rect x="58" y="22" width="4" height="28" fill="#24304a"/><path d="M20 40 Q 60 -6 100 36" stroke="#fff" stroke-width="3" stroke-dasharray="4 5" fill="none"/><circle cx="84" cy="18" r="5" fill="#fff" stroke="#24304a" stroke-width="2"/>',
 };
+const GAME_COL = { hideseek: '#55d36b', blinddrive: '#4fb4ff' };
 const TEAM_COL = ['#ff5d6c', '#4fb4ff', '#55d36b', '#ffc727'], NO_TEAM = '#c4cad6';
 const CROWN = '<svg width="44" height="32" viewBox="0 0 46 34"><path d="M4 30 L2 8 L14 18 L23 3 L32 18 L44 8 L42 30 Z" fill="#ffd23f" stroke="#24304a" stroke-width="4" stroke-linejoin="round"/><circle cx="23" cy="22" r="3.5" fill="#ff5d6c"/></svg>';
 const BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="#24304a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
@@ -113,7 +116,7 @@ export async function enter(ctx) {
     const me = lobby.players.find(p => p.id === net.myId);
     for (let t = 0; t < T.count; t++) {
       const mem = lobby.players.filter(p => p.team === t);
-      const col = ui.h(`<div class="lb-team" style="background:${TEAM_COL[t]}"><div class="tn o">${ui.esc((T.names || [])[t] || 'Team ' + (t + 1))}</div><div class="tc"></div></div>`);
+      const col = ui.h(`<div class="lb-team" style="background:${TEAM_COL[t]}"><div class="hd"><div class="tn o">${ui.esc((T.names || [])[t] || 'Team ' + (t + 1))}</div></div><div class="tc"></div></div>`);
       const tc = col.querySelector('.tc');
       for (const p of mem) {
         const ch = ui.h(`<div class="ch"><img alt=""><span>${ui.esc(p.name)}</span></div>`);
@@ -123,7 +126,7 @@ export async function enter(ctx) {
       const mine = me && me.team === t, full = mem.length >= T.max && !mine;
       const b = ui.btn(mine ? 'Leave' : 'Join', mine ? 'white' : 'sun', () => { net.send({ t: 'profile', team: mine ? -1 : t }); });
       if (full) b.disabled = true;
-      col.appendChild(b);
+      col.querySelector('.hd').appendChild(b);
       el.appendChild(col);
     }
   }
@@ -205,11 +208,15 @@ export async function enter(ctx) {
     const games = net.games || [];
     const g = games.find(x => x.id === lobby.game) || games[0];
     const box = L.querySelector('.lb-games');
-    if (!box.dataset.done && g) {
-      box.dataset.done = 1;
-      box.innerHTML = `<div class="lb-g" style="background:#55d36b"><svg viewBox="0 0 120 62">${ART[g.id] || ''}</svg><div class="nm">${g.name}</div><div class="pl">${g.min}–${g.max} players</div></div>
-        <div class="lb-g soon" style="background:#4fb4ff"><svg viewBox="0 0 120 62">${ART.drive}</svg><div class="nm">Blind Drive</div><div class="pl">SOON</div></div>
-        <div class="lb-g soon" style="background:#ff8a4c"><svg viewBox="0 0 120 62">${ART.badminton}</svg><div class="nm">Critter Badminton</div><div class="pl">SOON</div></div>`;
+    if (g && box.dataset.game !== g.id + isHost) {
+      // the room's game gets the big card; the host can tap another game to switch to it
+      box.dataset.game = g.id + isHost;
+      const card = x => x === g
+        ? `<div class="lb-g" style="background:${GAME_COL[x.id] || '#55d36b'}"><svg viewBox="0 0 120 62">${ART[x.id] || ''}</svg><div class="nm">${ui.esc(x.name)}</div><div class="pl">${x.min}–${x.max} players</div></div>`
+        : `<div class="lb-g soon${isHost ? ' pick' : ''}" data-g="${x.id}" style="background:${GAME_COL[x.id] || '#4fb4ff'}"><svg viewBox="0 0 120 62">${ART[x.id] || ''}</svg><div class="nm">${ui.esc(x.name)}</div><div class="pl">${isHost ? 'PLAY THIS' : `${x.min}–${x.max} players`}</div></div>`;
+      box.innerHTML = [g, ...games.filter(x => x !== g)].map(card).join('') +
+        `<div class="lb-g soon" style="background:#ff8a4c"><svg viewBox="0 0 120 62">${ART.badminton}</svg><div class="nm">Critter Badminton</div><div class="pl">SOON</div></div>`;
+      box.querySelectorAll('.pick').forEach(c => c.onclick = () => { sfx.click(); net.send({ t: 'settings', game: c.dataset.g }); });
     }
     const panel = L.querySelector('.lb-panel'), T = teamsMeta();
     panel.classList.toggle('tm', !!T);
@@ -263,7 +270,7 @@ export async function enter(ctx) {
     const cam = engine.camera, th = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), panelH = L.querySelector('.lb-panel').offsetHeight / innerHeight;
     if (portrait !== cam.aspect < .9) layout();
     if (portrait) { const d = Math.max(8, 3.3 / (th * cam.aspect)) + (rows - 2) * 1.2; cam.position.set(0, d * .42, d * .92 - (rows - 2) * .6); cam.lookAt(0, -.1 - panelH * 4.5, -(rows - 1) * .5); }
-    else { const per = Math.ceil((slots.size + (empty ? 1 : 0)) / rows), halfW = per * 1.2 * [1, .85, .72][rows - 1] + 1; const d = Math.max(9, halfW / (th * cam.aspect)); cam.position.set(Math.sin(t * .15) * .6, d * .3 + (rows - 1) * 1.2, d - (rows - 1) * .4); cam.lookAt(0, .75 - panelH * 3.2 - (rows - 1) * .3, -(rows - 1) * 1.6); }
+    else { const per = Math.ceil((slots.size + (empty ? 1 : 0)) / rows), halfW = per * 1.2 * [1, .85, .72][rows - 1] + 1; const ex = Math.max(0, panelH - .22), d = Math.max(9, halfW / (th * cam.aspect)) * (1 + ex * 1.6); cam.position.set(Math.sin(t * .15) * .6, d * .3 + (rows - 1) * 1.2, d - (rows - 1) * .4); cam.lookAt(0, .75 - panelH * 3.2 - ex * 4 - (rows - 1) * .3, -(rows - 1) * 1.6); }
     for (const s of slots.values()) {
       if (!s.pet) continue;
       s.pet.mixer.update(dt);

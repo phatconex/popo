@@ -11,6 +11,9 @@ const heights = new Map(); // path -> natural model height
 
 export function loadModel(path) {
   if (!cache.has(path)) cache.set(path, loader.loadAsync(BASE + path).then(g => {
+    // Some Kenney packs (nature) ship materials with metalness 1, which turns their shaded sides black
+    // under our lights (no environment map). Every model here is meant to be matte.
+    g.scene.traverse(m => { if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => { if ('metalness' in mt) mt.metalness = 0; }); });
     const b = new THREE.Box3().setFromObject(g.scene);
     heights.set(path, Math.max(.01, b.max.y - b.min.y));
     return g;
@@ -37,13 +40,25 @@ export async function prop(path, height, opts = {}) {
   return root;
 }
 
-// Lighten/saturate a model's own materials once (Kenney greens read too dark under our lights).
+// Retint a model's own materials once. light > 0 adds HSL lightness; light < 0 scales the colour down by that
+// fraction (keeps dark parts from clipping to black); sat adds saturation. Defaults: the nature pack is pale
+// once it is matte (see loadModel), so it is darkened; the other packs read a little dark, so they are lightened.
 const tinted = new Set();
-export async function brighten(path, light = .07, sat = .05) {
+const TONE = { nature: [-.7, .1], other: [.07, .05] };
+export async function brighten(path, light, sat) {
   if (tinted.has(path)) return;
   tinted.add(path);
-  const g = await loadModel(path);
-  g.scene.traverse(m => { if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => mt.color && mt.color.offsetHSL(0, sat, light)); });
+  const [l0, s0] = path.startsWith('nature/') ? TONE.nature : TONE.other;
+  light = light ?? l0; sat = sat ?? s0;
+  const g = await loadModel(path), done = new Set();
+  g.scene.traverse(m => {
+    if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => {
+      if (!mt.color || done.has(mt)) return;
+      done.add(mt);
+      if (light >= 0) mt.color.offsetHSL(0, sat, light);
+      else mt.color.offsetHSL(0, sat, 0).multiplyScalar(1 + light);
+    });
+  });
 }
 
 // A static prop scaled so its widest horizontal side equals `size` (world units).
