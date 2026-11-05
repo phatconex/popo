@@ -467,6 +467,7 @@ test('stall: no car message for 1 s -> v 0 in snapshot', () => {
   assert.strictEqual(carOf(api, 0)[5] & 2, 2, 'gas flag');
   ticks(g, 12);
   assert.strictEqual(carOf(api, 0)[4], 0);
+  assert.strictEqual(carOf(api, 0)[5] & 6, 0, 'gas and brake flags cleared');
 });
 
 test('disconnect: driver offline 5 s -> teammate drives; rejoin -> navigator until next level', () => {
@@ -529,24 +530,50 @@ test('leave: team down to 1 -> solo', () => {
   assert.deepStrictEqual(lastSnap(api).cars.map(c => c[0]), [1]);
 });
 
-test('fewer than 2 connected players -> api.end([])', () => {
-  { // disconnect
+test('fewer than 2 players in the room -> api.end([]); a disconnect alone does not end it', () => {
+  { // disconnect: the seat is kept, the match goes on
     const { api, g } = newGame([-1, -1]);
     toRace(g);
     const p = api.p(2); p.connected = false; g.onDisconnect(p);
+    ticks(g, 200); // 10 s
     assert.strictEqual(api.ends.length, 0);
-    g.tick(DT);
+    assert.strictEqual(g.over, false);
+    // leaving for good (core removes the player before onLeave) ends it once
+    api.leave(g, 2);
+    assert.deepStrictEqual(api.ends, [[]]);
+    ticks(g, 10);
+    api.leave(g, 1);
+    assert.strictEqual(api.ends.length, 1);
+  }
+  { // leave down to 1
+    const { api, g } = newGame([0, 0, 1]);
+    api.leave(g, 3);
+    assert.strictEqual(api.ends.length, 0);
+    api.leave(g, 2);
     assert.deepStrictEqual(api.ends, [[]]);
     ticks(g, 10);
     assert.strictEqual(api.ends.length, 1);
   }
-  { // leave
-    const { api, g } = newGame([0, 0, 1]);
-    api.leave(g, 3); api.leave(g, 2);
-    assert.strictEqual(api.ends.length, 0);
-    g.tick(DT);
-    assert.deepStrictEqual(api.ends, [[]]);
-  }
+});
+
+test('everyone offline does not end the level early', () => {
+  const { api, g } = newGame([0, 0, 1, 1]);
+  toRace(g);
+  for (const p of api.list) { p.connected = false; g.onDisconnect(p); }
+  ticks(g, 100); // 5 s
+  assert.strictEqual(g.ph, 'race');
+  assert.strictEqual(api.msgs('level').length, 0);
+  assert.strictEqual(api.ends.length, 0);
+});
+
+test('a player offline at start is still balanced into a team', () => {
+  const api = bdApi([-1, -1, -1, -1]);
+  api.p(3).connected = false;
+  const g = G.create(api); g.start();
+  assert.deepStrictEqual(g.teams.map(t => t.members), [[1, 2], [3, 4]]);
+  assert.deepStrictEqual(api.msgs('init', 3)[0].me, { team: 1, role: 'nav' });
+  // the offline player is the rotated driver (members[0]), so the online teammate drives
+  assert.strictEqual(g.teamOf(3).driver, 4);
 });
 
 test('all members of a team offline -> it does not hold up the level end', () => {
@@ -603,9 +630,10 @@ test('genTrack: short BD_FAST tracks keep every object on the road', () => {
     assert.strictEqual(t.stops.length, level >= 2 ? 4 : 3);
     for (const st of t.stops) { const r = BD.stopPoints(t, st).ring; assert.ok(Number.isFinite(r.x) && Number.isFinite(r.z)); }
   }
-  // default lengths are unchanged by the squeeze
-  const a = genTrack('country', 0, 7), b = genTrack('country', 0, 7, {});
-  assert.deepStrictEqual(a, b);
+  // default lengths are unchanged by the squeeze: object indices recorded from the generator before the fix (b956fbc)
+  const fp = t => [...t.stops.map(s => s.i), ...t.crossers.map(c => c.i), ...t.slicks.map(s => s.x)];
+  assert.deepStrictEqual([['country', 0, 7], ['snow', 0, 11], ['night', 5, 3]].map(([th, l, sd]) => fp(genTrack(th, l, sd))),
+    [[14, 59, 66, 6, 22, -12.54, -42.07], [13, 28, 80, 21, 66, 5.88, 9.86], [127, 134, 146, 154, 6, 55, -24.22, 35.88]]);
 });
 
 test('BD_FAST: a full match runs on short tracks and ends', () => {

@@ -146,7 +146,7 @@ class BlindDrive {
     const S = this.api.settings;
     this.levels = [2, 4, 6].includes(+S.levels) ? +S.levels : 4;
     this.delay = Math.max(0, Math.min(2, +S.delay || 0));
-    const ps = this.api.players().filter(p => p.connected);
+    const ps = this.api.players(); // everyone in the room, offline seats too (the swap rule covers them)
     const T = meta.teams, groups = balance(ps.map(p => ({ id: p.id, team: p.team })), T.count, T.max);
     this.teams = groups.map((members, id) => ({ id, name: T.names[id], members, driver: null, total: 0, firsts: 0 })).filter(t => t.members.length);
     this.newLevel();
@@ -220,7 +220,7 @@ class BlindDrive {
 
   tick(dt) {
     if (this.over || !this.ph) return;
-    if (this.online().size < 2) { this.over = true; return this.api.end([]); }
+    if (this.endIfAlone()) return;
     dt = Math.min(.1, Math.max(0, +dt || 0));
     this.clock += dt; this.lt += dt;
     this.crs = this.crossers();
@@ -259,7 +259,7 @@ class BlindDrive {
         continue;
       }
       if (t.inv > 0) t.inv = Math.max(0, t.inv - dt);
-      if (this.clock - t.seen >= STALL_T) c.v = 0;
+      if (this.clock - t.seen >= STALL_T) { c.v = 0; c.g = 0; c.b = 0; }
       if (t.place) continue;
       const n = BD.nearestOnTrack(tr, c.x, c.z);
       if (!t.inv && (n.dist > OFF_LIMIT || this.crs.some(q => q.onRoad && Math.abs(c.v) > HIT_V && Math.hypot(q.x - c.x, q.z - c.z) <= HIT_R))) { this.spinOut(t, n.i); continue; }
@@ -283,7 +283,7 @@ class BlindDrive {
       this.api.bcast({ t: 'fx', kind: 'finish', team: t.id, i: t.place });
     }
     const on = this.online(), active = this.teams.filter(t => t.members.some(id => on.has(id)));
-    if (active.every(t => t.place) || (this.firstAt !== null && this.rt - this.firstAt >= AFTER_FIRST - 1e-9) || this.rt >= LEVEL_CAP - 1e-9) this.endLevel();
+    if ((active.length && active.every(t => t.place)) || (this.firstAt !== null && this.rt - this.firstAt >= AFTER_FIRST - 1e-9) || this.rt >= LEVEL_CAP - 1e-9) this.endLevel();
   }
 
   // Reset onto the centre line at index i, facing along the road; frozen for SPIN_T.
@@ -349,9 +349,18 @@ class BlindDrive {
     if (t && t.driver === p.id) { t.car.g = 0; t.car.b = 0; }
   }
 
+  // Like Hide & Seek: the match ends when fewer than 2 players are still in the room (offline seats count).
+  endIfAlone() {
+    if (this.over || this.api.players().length >= 2) return this.over;
+    this.over = true;
+    this.api.end([]);
+    return true;
+  }
+
   onLeave(p) {
+    if (this.endIfAlone()) return;
     const t = this.teamOf(p.id);
-    if (!t || this.over) return;
+    if (!t) return;
     const idx = t.members.indexOf(p.id);
     t.members.splice(idx, 1);
     if (!t.members.length) { this.teams = this.teams.filter(x => x !== t); return this.sendRoles(); }
