@@ -152,3 +152,73 @@ test('genTrack: same seed gives same track', () => {
   for (const theme of THEME_NAMES) assert.deepStrictEqual(genTrack(theme, 3, 12345), genTrack(theme, 3, 12345));
   assert.notDeepStrictEqual(genTrack('country', 0, 1).pts, genTrack('country', 0, 2).pts);
 });
+
+// ---- Task 4: game module pure rules ----
+const G = require('../server/games/blinddrive/index.js');
+const { balance, score, rank, validateMove } = G._test;
+const mk = teams => teams.map((team, i) => ({ id: 'p' + i, team }));
+const sizes = g => g.map(x => x.length);
+
+test('balance: 2 unpicked -> one group of 2', () => {
+  assert.deepStrictEqual(sizes(balance(mk([-1, -1]))).filter(Boolean), [2]);
+});
+test('balance: teams 0 and 3 -> one group of 2', () => {
+  const g = balance(mk([0, 3]));
+  assert.strictEqual(g.length, 4);
+  assert.deepStrictEqual(sizes(g).filter(Boolean), [2]);
+});
+test('balance: 3 unpicked -> one group of 3', () => {
+  assert.deepStrictEqual(sizes(balance(mk([-1, -1, -1]))).filter(Boolean), [3]);
+});
+test('balance: [0,0,1,1,-1] has no single', () => {
+  const s = sizes(balance(mk([0, 0, 1, 1, -1]))).filter(Boolean).sort();
+  assert.deepStrictEqual(s, [2, 3]);
+});
+test('balance: [0,1,1,1,2,2,2] all groups 2-3', () => {
+  for (const s of sizes(balance(mk([0, 1, 1, 1, 2, 2, 2]))).filter(Boolean)) assert.ok(s >= 2 && s <= 3);
+});
+test('balance: 8 unpicked -> four groups of 2', () => {
+  assert.deepStrictEqual(sizes(balance(mk(Array(8).fill(-1)))), [2, 2, 2, 2]);
+});
+test('balance: invalid teams treated as unassigned', () => {
+  const g = balance([{ id: 'a', team: 9 }, { id: 'b', team: 'x' }, { id: 'c', team: 1.5 }]);
+  assert.deepStrictEqual(sizes(g).filter(Boolean), [3]);
+});
+test('balance property: random picks', () => {
+  for (let run = 0; run < 500; run++) {
+    const n = 2 + (Math.random() * 7 | 0);
+    const ps = mk(Array.from({ length: n }, () => (Math.random() * 5 | 0) - 1));
+    const g = balance(ps);
+    assert.strictEqual(g.length, 4);
+    const ids = g.flat();
+    assert.deepStrictEqual(ids.slice().sort(), ps.map(p => p.id).sort(), JSON.stringify(ps));
+    for (const x of g) assert.ok(x.length === 0 || (x.length >= 2 && x.length <= 3), JSON.stringify(ps) + JSON.stringify(g));
+  }
+});
+test('score', () => {
+  assert.strictEqual(score({ place: 1, picked: 2, coins: 3 }), 530);
+  assert.strictEqual(score({ place: null, picked: 1, coins: 0 }), 100);
+  assert.strictEqual(score({ place: 4, picked: 0, coins: 0 }), 60);
+  assert.strictEqual(score({ place: 5, picked: 0, coins: 0 }), 0);
+});
+test('rank shares equal total and firsts', () => {
+  const r = rank([{ team: 0, total: 500, firsts: 1 }, { team: 1, total: 500, firsts: 2 }, { team: 2, total: 500, firsts: 2 }]);
+  assert.deepStrictEqual(r.map(x => [x.team, x.rank]), [[1, 1], [2, 1], [0, 3]]);
+});
+test('validateMove', () => {
+  const prev = { x: 0, z: 0, t: 1 };
+  assert.ok(validateMove(prev, { x: .3, z: 0 }, 1.05));
+  assert.ok(!validateMove(prev, { x: 3, z: 0 }, 1.05));
+  assert.ok(!validateMove(prev, { x: NaN, z: 0 }, 1.05));
+  assert.ok(!validateMove(prev, { x: 'a', z: 0 }, 1.05));
+  assert.ok(!validateMove(prev, { x: '0.1', z: 0 }, 1.05));
+  assert.ok(!validateMove(prev, { x: 0, z: Infinity }, 1.05));
+  assert.ok(!validateMove(prev, { x: 0 }, 1.05));
+  assert.ok(!validateMove(prev, null, 1.05));
+  assert.ok(validateMove(null, { x: 1e6, z: -1e6 }, 1));
+});
+test('meta shape', () => {
+  assert.strictEqual(G.meta.id, 'blinddrive');
+  assert.deepStrictEqual(G.meta.teams, { count: 4, max: 3, names: ['Red', 'Blue', 'Green', 'Yellow'] });
+  assert.deepStrictEqual(G.meta.settings.map(s => s.key), ['map', 'levels', 'delay']);
+});
