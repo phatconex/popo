@@ -84,7 +84,7 @@ export class Hud {
     this.cbs = [...this.el.dash.querySelectorAll('.bd-cb')];
     // keyboard: navigator signals, or driving keys (held state)
     this.onKeyDown = e => {
-      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
       if (this.role === 'nav') {
         const k = SIG.findIndex(s => s.codes.includes(e.code));
         if (k >= 0) { e.preventDefault(); if (!e.repeat) this.press(k); }
@@ -141,8 +141,9 @@ export class Hud {
   }
 
   // Level info for the progress bar: {track, teams, level, levels, theme}. `teams[].got` is read live.
-  setLevel(st) {
+  setLevel(st, me) {
     this.lvl = st;
+    if (me) this.meTeam = me.team;
     const t = st.track, last = Math.max(1, t.pts.length - 1);
     this.el.lv.textContent = `Level ${st.level} / ${st.levels} · ${MAPS[st.theme] || ''}`;
     this.el.track.querySelectorAll('.stop,.mk').forEach(n => n.remove());
@@ -162,6 +163,7 @@ export class Hud {
   // Snapshot `s` message. Updates progress markers, passengers and coins.
   update(s, me) {
     this.meTeam = me && me.team;
+    this.ph = s.ph;
     const lvl = this.lvl; if (!lvl) return;
     const t = lvl.track, last = Math.max(1, t.pts.length - 1), BD = window.BD;
     for (const c of s.cars) {
@@ -188,7 +190,7 @@ export class Hud {
 
   // Driver: a signal arrived. Big card, previous three in the history strip, note.
   showSignal(k, fromName) {
-    const s = SIG[k]; if (!s) return;
+    const s = SIG[k]; if (!s || (this.role !== 'driver' && this.role !== 'solo')) return;
     this.hist.unshift(k); this.hist = this.hist.slice(0, 4);
     const card = this.el.card;
     card.style.background = s.col; card.querySelector('.ico').innerHTML = s.svg; card.querySelector('span').textContent = s.big;
@@ -249,7 +251,7 @@ export class Hud {
 
   // One continuous oscillator: created on the driver's first input, pitch 90 + 40|v| Hz, very quiet.
   startHum() {
-    if (this.hum || sfx.muted || (this.role !== 'driver' && this.role !== 'solo')) return;
+    if (this.hum || sfx.muted || this.ph !== 'race' || (this.role !== 'driver' && this.role !== 'solo')) return;
     try {
       const ac = this.ac = this.ac || new AudioContext();
       if (ac.state === 'suspended') ac.resume();
@@ -260,13 +262,16 @@ export class Hud {
     } catch {}
   }
   tickHum() {
-    if (!this.hum) { if (this.started && !sfx.muted && (this.role === 'driver' || this.role === 'solo')) this.startHum(); return; }
-    if (sfx.muted || (this.role !== 'driver' && this.role !== 'solo')) { this.stopHum(); return; }
+    if (!this.hum) { if (this.started && !sfx.muted && this.ph === 'race' && (this.role === 'driver' || this.role === 'solo')) this.startHum(); return; }
+    if (sfx.muted || this.ph !== 'race' || (this.role !== 'driver' && this.role !== 'solo')) { this.stopHum(); return; }
     this.hum.o.frequency.value = 90 + 40 * this.vNow;
   }
   stopHum() {
     const h = this.hum; this.hum = null;
-    if (h) { try { h.o.stop(); h.o.disconnect(); h.g.disconnect(); } catch {} }
+    if (h) { // ramp to silence first so there is no click
+      try { const t = this.ac.currentTime; h.g.gain.cancelScheduledValues(t); h.g.gain.setTargetAtTime(0, t, .02); h.o.stop(t + .08); } catch {}
+      setTimeout(() => { try { h.o.disconnect(); h.g.disconnect(); } catch {} }, 150);
+    }
   }
 
   // Mirror held keys on the on-screen buttons (call each frame while driving).

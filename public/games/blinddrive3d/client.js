@@ -8,6 +8,7 @@ import { Hud } from './hud.js';
 import { sfx, vibrate } from '../../core3d/sfx.js';
 
 const BD = window.BD;
+const OFF_LIMIT = 6; // metres from the centre line where the server spins you out
 const INTERP_MS = 110, SEND_T = .05, SPIN_T = 2;
 
 let ctx, L, hud, world = null, offFrame = null, building = null, gen = 0;
@@ -103,7 +104,7 @@ async function startLevel(d) {
   }
   const sp = d.start.find(s => s[0] === me.team);
   own = drives() && sp ? { x: sp[1], z: sp[2], a: sp[3], v: 0, lat: 0 } : null;
-  hud.setLevel(st); syncRole();
+  hud.setLevel(st, me); syncRole();
   camSnap = true; driverView = null;
   engine.setScene(world.scene);
   ctx.app.loaded(); ctx.ui.reveal();
@@ -226,7 +227,7 @@ function nearby(env) {
     const dx = sl.x - own.x, dz = sl.z - own.z, dist = Math.hypot(dx, dz);
     if ((dx * fx + dz * fz > 0 || env.slick) && dist < 8) d = Math.max(d, 1 - dist / 8);
   }
-  d = Math.max(d, Math.max(0, Math.min(1, env.edge + tr.rw - 5))); // 5 m from the centre line up to the 6 m limit
+  d = Math.max(d, Math.max(0, Math.min(1, env.edge + tr.rw - (OFF_LIMIT - 1)))); // the last metre before the off-road limit
   return d;
 }
 
