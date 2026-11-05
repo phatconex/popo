@@ -56,7 +56,7 @@ class Core {
   lobbyMsg(r) {
     return {
       t: 'lobby', code: r.code, host: r.host, state: r.game ? 'playing' : 'lobby', game: r.gameId, settings: r.settings,
-      players: [...r.players.values()].map(p => ({ id: p.id, name: p.name, av: p.av, on: p.connected, wins: p.wins, ready: !!p.ready })),
+      players: [...r.players.values()].map(p => ({ id: p.id, name: p.name, av: p.av, on: p.connected, wins: p.wins, ready: !!p.ready, team: p.team })),
     };
   }
   bcast(r, o) {
@@ -93,7 +93,7 @@ class Core {
           room = { code: this.makeCode(), players: new Map(), host: null, game: null, gameId, settings: this.defaults(gameId) };
           this.rooms.set(room.code, room);
         }
-        const np = { id: this.nextId++, token: crypto.randomBytes(12).toString('hex'), name, av, room, wins: 0, emoteAt: 0, ready: false };
+        const np = { id: this.nextId++, token: crypto.randomBytes(12).toString('hex'), name, av, room, wins: 0, emoteAt: 0, ready: false, team: -1 };
         room.players.set(np.id, np);
         if (!room.host) room.host = np.id;
         this.attach(conn, np);
@@ -115,11 +115,15 @@ class Core {
         if (m.name) p.name = String(m.name).trim().slice(0, 14) || p.name;
         if (m.av != null) p.av = Math.abs(m.av | 0) % AVATARS;
         if (m.ready != null) p.ready = !!m.ready;
+        if (m.team != null) {
+          const T = this.games[r.gameId].meta.teams, t = m.team | 0;
+          if (T && (t === -1 || (t >= 0 && t < T.count && [...r.players.values()].filter(q => q !== p && q.team === t).length < T.max))) p.team = t;
+        }
         this.sync(r);
         break;
       case 'settings': {
         if (!r || r.host !== p.id || r.game) return;
-        if (m.game && this.games[m.game] && m.game !== r.gameId) { r.gameId = m.game; r.settings = this.defaults(m.game); }
+        if (m.game && this.games[m.game] && m.game !== r.gameId) { r.gameId = m.game; r.settings = this.defaults(m.game); for (const q of r.players.values()) q.team = -1; }
         const opts = this.games[r.gameId].meta.settings || [];
         if (m.settings) for (const o of opts) if (o.options.some(x => x.v === m.settings[o.key])) r.settings[o.key] = m.settings[o.key];
         this.sync(r);
@@ -130,6 +134,7 @@ class Core {
         const g = this.games[r.gameId];
         const n = [...r.players.values()].filter(q => q.connected).length;
         if (n < g.meta.min) return send(conn.ws, { t: 'err', msg: `Need at least ${g.meta.min} players` });
+        if (n > g.meta.max) return send(conn.ws, { t: 'err', msg: `Max ${g.meta.max} players for this game` });
         r.game = g.create(this.api(r));
         this.sync(r);
         r.game.start();

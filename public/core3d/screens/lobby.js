@@ -41,6 +41,16 @@ const css = `
 .lb-acts .b.on{background:#2fae46}
 .lb .emote-btn{top:84px;bottom:auto}.lb .emote-panel{top:150px;bottom:auto}
 .lb-wait{flex:1;display:flex;align-items:center;justify-content:center;font-size:17px;opacity:.9;text-align:center}
+.lb-panel.tm{flex-wrap:wrap}
+.lb-teams{flex:none;width:100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.lb-team{border-radius:16px;padding:6px 8px 8px;display:flex;flex-direction:column;gap:5px;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 0 0 3px var(--ink);min-width:0}
+.lb-team .tn{font-size:20px;text-shadow:0 2px 0 rgba(20,30,50,.35)}
+.lb-team .tc{display:flex;flex-direction:column;gap:4px;min-height:96px}
+.lb-team .ch{display:flex;align-items:center;gap:6px;background:#fff;color:var(--ink);border-radius:10px;box-shadow:0 0 0 3px var(--ink);padding:1px 6px 1px 2px;font-size:14px;min-width:0;height:30px}
+.lb-team .ch img{width:26px;height:26px;border-radius:8px;flex:none}
+.lb-team .ch span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-team .b{font-size:16px;padding:3px 8px 5px}
+@media (max-width:560px){.lb-teams{grid-template-columns:repeat(2,1fr);gap:8px}.lb-team .tc{min-height:0}.lb-team .tn{font-size:17px}.lb-team .ch{height:26px;font-size:12px}.lb-team .ch img{width:22px;height:22px}}
 @media (max-width:760px){
   .lb-title{font-size:30px}.lb-code b{font-size:22px}.lb-code small{font-size:10px}.lb-code .b{font-size:15px}
   .lb-panel{flex-direction:column;padding:10px;gap:10px;border-radius:22px}
@@ -54,6 +64,7 @@ const ART = {
   drive: '<rect x="44" y="0" width="32" height="62" fill="#4b4f63"/><rect x="58" y="4" width="4" height="10" fill="#fff"/><rect x="58" y="24" width="4" height="10" fill="#fff"/><rect x="48" y="30" width="18" height="26" rx="5" fill="#ff5d6c" stroke="#24304a" stroke-width="3"/>',
   badminton: '<rect x="0" y="48" width="120" height="14" fill="#3fa94f"/><rect x="58" y="22" width="4" height="28" fill="#24304a"/><path d="M20 40 Q 60 -6 100 36" stroke="#fff" stroke-width="3" stroke-dasharray="4 5" fill="none"/><circle cx="84" cy="18" r="5" fill="#fff" stroke="#24304a" stroke-width="2"/>',
 };
+const TEAM_COL = ['#ff5d6c', '#4fb4ff', '#55d36b', '#ffc727'], NO_TEAM = '#c4cad6';
 const CROWN = '<svg width="44" height="32" viewBox="0 0 46 34"><path d="M4 30 L2 8 L14 18 L23 3 L32 18 L44 8 L42 30 Z" fill="#ffd23f" stroke="#24304a" stroke-width="4" stroke-linejoin="round"/><circle cx="23" cy="22" r="3.5" fill="#ff5d6c"/></svg>';
 const BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="#24304a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
 
@@ -93,14 +104,39 @@ export async function enter(ctx) {
     p.play(s.ready ? 'dance' : 'idle', 0);
   }
 
+  function teamsMeta() {
+    const games = net.games || [], g = games.find(x => x.id === lobby.game) || games[0];
+    return g && g.teams || null;
+  }
+  function renderTeams(T, el) {
+    el.innerHTML = '';
+    const me = lobby.players.find(p => p.id === net.myId);
+    for (let t = 0; t < T.count; t++) {
+      const mem = lobby.players.filter(p => p.team === t);
+      const col = ui.h(`<div class="lb-team" style="background:${TEAM_COL[t]}"><div class="tn o">${ui.esc((T.names || [])[t] || 'Team ' + (t + 1))}</div><div class="tc"></div></div>`);
+      const tc = col.querySelector('.tc');
+      for (const p of mem) {
+        const ch = ui.h(`<div class="ch"><img alt=""><span>${ui.esc(p.name)}</span></div>`);
+        assets.thumb(p.av).then(u => { ch.querySelector('img').src = u; }, () => {});
+        tc.appendChild(ch);
+      }
+      const mine = me && me.team === t, full = mem.length >= T.max && !mine;
+      const b = ui.btn(mine ? 'Leave' : 'Join', mine ? 'white' : 'sun', () => { net.send({ t: 'profile', team: mine ? -1 : t }); });
+      if (full) b.disabled = true;
+      col.appendChild(b);
+      el.appendChild(col);
+    }
+  }
+
   function update(m) {
     lobby = m;
+    const TM = teamsMeta();
     const players = m.players, meIsHost = m.host === net.myId;
     codeBox.querySelector('.cd').textContent = m.code;
     // add / update
     players.forEach((p, i) => {
       let s = slots.get(p.id);
-      const color = ui.PCOL[i % ui.PCOL.length];
+      const color = TM && p.team >= 0 ? TEAM_COL[p.team] : TM ? NO_TEAM : ui.PCOL[i % ui.PCOL.length];
       if (!s) {
         s = { id: p.id, ped: pedestal(color), code: -1 };
         s.tag = ui.tag(s.ped, '', { y: 0, below: true, cls: 'lb-tag' });
@@ -175,6 +211,11 @@ export async function enter(ctx) {
         <div class="lb-g soon" style="background:#4fb4ff"><svg viewBox="0 0 120 62">${ART.drive}</svg><div class="nm">Blind Drive</div><div class="pl">SOON</div></div>
         <div class="lb-g soon" style="background:#ff8a4c"><svg viewBox="0 0 120 62">${ART.badminton}</svg><div class="nm">Critter Badminton</div><div class="pl">SOON</div></div>`;
     }
+    const panel = L.querySelector('.lb-panel'), T = teamsMeta();
+    panel.classList.toggle('tm', !!T);
+    let tbox = panel.querySelector('.lb-teams');
+    if (T) { if (!tbox) { tbox = ui.h('<div class="lb-teams"></div>'); panel.insertBefore(tbox, panel.firstChild); } renderTeams(T, tbox); }
+    else if (tbox) tbox.remove();
     const opts = L.querySelector('.lb-opts');
     opts.classList.toggle('lb-ro', !isHost);
     opts.innerHTML = '';
