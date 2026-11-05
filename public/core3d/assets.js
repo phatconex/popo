@@ -44,6 +44,8 @@ export async function prop(path, height, opts = {}) {
 // fraction (keeps dark parts from clipping to black); sat adds saturation. Defaults: the nature pack is pale
 // once it is matte (see loadModel), so it is darkened; the other packs read a little dark, so they are lightened.
 const tinted = new Set();
+// Nature models that never go through brighten() now render matte and lighter than before the metalness fix,
+// so every caller that places nature/ models (e.g. Blind Drive scenery) must call brighten() on them first.
 const TONE = { nature: [-.7, .1], other: [.07, .05] };
 export async function brighten(path, light, sat) {
   if (tinted.has(path)) return;

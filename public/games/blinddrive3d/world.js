@@ -173,7 +173,7 @@ export async function buildWorld(track, quality) {
   // --- crossing animals: walk across the road at pts[c.i], position from the shared level clock ---
   const crossers = await Promise.all((track.crossers || []).map(async c => {
     const p = await pet(c.kind, .8);
-    p.c = c; scene.add(p.root);
+    p.c = c; p.at = track.pts[c.i]; p.tan = tangent(c.i); scene.add(p.root);
     return p;
   }));
 
@@ -181,7 +181,7 @@ export async function buildWorld(track, quality) {
   let time = 0;
   const placeCrossers = t => {
     for (const p of crossers) {
-      const q = BD.crosserPos(track, p.c, t), pt = track.pts[p.c.i], [tx, tz] = tangent(p.c.i);
+      const q = BD.crosserPos(track, p.c, t), pt = p.at, tx = p.tan[0], tz = p.tan[1];
       p.root.position.set(q.x, H(q.x, q.z), q.z);
       // walking: face the walking direction along the right vector (-tz, tx); resting: face the road
       const side = (q.x - pt[0]) * -tz + (q.z - pt[1]) * tx;

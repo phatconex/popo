@@ -26,6 +26,7 @@ const cars = new Map();   // team id -> CarView
 const snaps = [];         // [{t: ms, cars: Map(team -> [x, z, a, v, flags])}]
 let queue = [];
 const keys = {};
+const focusPt = { x: 0, y: 0, z: 0, a: 0 };
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), wantPos = new THREE.Vector3(), wantLook = new THREE.Vector3();
 let camSnap = true, driverView = null;
 const listeners = [];
@@ -64,7 +65,17 @@ export function unmount() {
 }
 
 export function onMsg(d) {
-  if (d.t === 'init') { building = startLevel(d).catch(e => { console.error(e); building = null; }); return; }
+  if (d.t === 'init') {
+    queue = []; // only messages after the latest init belong to the level being built
+    const job = startLevel(d).catch(e => {
+      console.error(e);
+      if (building !== job) return; // a newer init owns the build now
+      building = null; queue = [];
+      ctx.ui.toast("Couldn't load this level. Waiting for the next one.", '#ffd0d4', 3500);
+    });
+    building = job;
+    return;
+  }
   if (building) { queue.push(d); return; }
   handle(d);
 }
@@ -168,16 +179,18 @@ function handle(d) {
 }
 
 // Pose of a team's car `INTERP_MS` behind the newest snapshot (or the start grid before any snapshot).
+const scratch = { x: 0, z: 0, a: 0 };
+const pose = (x, z, a) => { scratch.x = x; scratch.z = z; scratch.a = a; return scratch; }; // valid until the next call
 function interp(team, now) {
   const rt = now - INTERP_MS;
   let i = snaps.length - 1;
   while (i > 0 && snaps[i].t > rt) i--;
   const a = snaps[i] && snaps[i].cars.get(team), bs = snaps[i + 1], b = bs && bs.cars.get(team);
   if (!a) { const s = st.start.find(x => x[0] === team); return s ? { x: s[1], z: s[2], a: s[3] } : null; }
-  if (!b || snaps[i].t > rt) return { x: a[1], z: a[2], a: a[3] };
+  if (!b || snaps[i].t > rt) return pose(a[1], a[2], a[3]);
   const k = Math.min(1, (rt - snaps[i].t) / (bs.t - snaps[i].t || 1));
   let da = b[3] - a[3]; da = Math.atan2(Math.sin(da), Math.cos(da));
-  return { x: a[1] + (b[1] - a[1]) * k, z: a[2] + (b[2] - a[2]) * k, a: a[3] + da * k };
+  return pose(a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + da * k);
 }
 
 function drive(dt) {
@@ -186,9 +199,9 @@ function drive(dt) {
   const steer = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const inp = { steer, gas: keys.KeyW || keys.ArrowUp ? 1 : 0, brake: keys.KeyS || keys.ArrowDown ? 1 : 0, rev: keys.KeyR ? 1 : 0 };
   BD.stepCar(own, inp, BD.envAt(st.track, own.x, own.z, own.a), dt);
-  sendAcc += dt;
+  sendAcc = Math.min(sendAcc + dt, SEND_T * 2);
   if (sendAcc >= SEND_T) {
-    sendAcc = 0;
+    sendAcc -= SEND_T;
     ctx.net.game({ t: 'car', x: r2(own.x), z: r2(own.z), a: r3(own.a), v: r2(own.v), g: inp.gas, b: inp.brake });
   }
 }
@@ -218,7 +231,7 @@ function frame(dt) {
     const mineCar = team === me.team;
     v.root.visible = mineCar || !driverView;
     v.setGhost(!mineCar && me.team >= 0);
-    if (team === focusTeam) focus = { x: p.x, y, z: p.z, a: p.a };
+    if (team === focusTeam) focus = Object.assign(focusPt, { x: p.x, y, z: p.z, a: p.a });
   }
   world.tick(dt, lt, focus);
   // camera: navigator 10 m behind, 9.5 m up, looking 4.5 m ahead; driver 4.6 m behind, 2.7 m up
@@ -237,8 +250,11 @@ function frame(dt) {
   // role chip (the HUD replaces this later)
   const t = st.teams.find(x => x.id === me.team);
   const role = me.role === 'driver' ? 'DRIVER' : me.role === 'solo' ? 'SOLO DRIVER' : 'NAVIGATOR';
-  const sub = `${t ? t.name + ' team' : 'Watching'} · Level ${st.level}/${st.levels} · ${ph}${lastSig != null && me.role === 'driver' ? ' · signal ' + lastSig : ''}`;
-  const html = `${role}<small>${ctx.ui.esc(sub)}</small>`;
-  if (roleHtml !== html) { roleHtml = html; roleEl.innerHTML = html; }
+  const key = `${me.role}|${t ? t.id : -1}|${st.level}|${ph}|${lastSig}`;
+  if (roleHtml !== key) {
+    roleHtml = key;
+    const sub = `${t ? t.name + ' team' : 'Watching'} · Level ${st.level}/${st.levels} · ${ph}${lastSig != null && me.role === 'driver' ? ' · signal ' + lastSig : ''}`;
+    roleEl.innerHTML = `${role}<small>${ctx.ui.esc(sub)}</small>`;
+  }
   roleEl.style.background = t ? TEAM_COL[t.id] : '#8c96a8';
 }

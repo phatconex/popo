@@ -79,7 +79,8 @@ export async function makeCar(teamColor, driverCode) {
   const driver = await seat(driverCode, .62, DRIVER_SEAT);
   body.add(driver.root);
 
-  let riders = [], gen = 0, ghost = false, spinLeft = 0, spinDur = 0, last = null, disposed = false;
+  let riders = [], gen = 0, ghost = false, spinLeft = 0, spinDur = 0, disposed = false;
+  const last = { x: 0, z: 0, set: false };
   const applyGhost = () => {
     for (const m of [...mats, ...petMats]) {
       if (m.userData.op == null) m.userData.op = m.opacity, m.userData.tr = m.transparent;
@@ -94,11 +95,11 @@ export async function makeCar(teamColor, driverCode) {
     root,
     // y = ground height under the car, pitch = nose-up angle in radians (atan of the slope along the heading)
     setPose(x, z, a, y, pitch) {
-      if (last) { // roll the wheels by the distance moved along the heading (skip teleports)
+      if (last.set) { // roll the wheels by the distance moved along the heading (skip teleports)
         const d = (x - last.x) * Math.sin(a) + (z - last.z) * Math.cos(a);
         if (Math.abs(d) < 2) for (const w of wheels) w.rotation.x += d / WHEEL_R;
       }
-      last = { x, z };
+      last.x = x; last.z = z; last.set = true;
       root.position.set(x, y, z);
       root.rotation.set(-pitch, a, 0);
     },
