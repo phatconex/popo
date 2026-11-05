@@ -11,7 +11,7 @@ const teamGame = { meta: { id: 'tg', name: 'Team', min: 2, max: 8, teams: { coun
 
 function sock() {
   const handlers = {};
-  return { readyState: 1, out: [], send(s) { this.out.push(JSON.parse(s)); }, on(ev, fn) { handlers[ev] = fn; }, msg(o) { handlers.message(Buffer.from(JSON.stringify(o))); }, last(t) { return [...this.out].reverse().find(m => m.t === t); } };
+  return { readyState: 1, out: [], send(s) { this.out.push(JSON.parse(s)); }, on(ev, fn) { handlers[ev] = fn; }, close() { this.readyState = 3; handlers.close && handlers.close(); }, msg(o) { handlers.message(Buffer.from(JSON.stringify(o))); }, last(t) { return [...this.out].reverse().find(m => m.t === t); } };
 }
 
 test('animal table has 24 entries in spec order', () => {
@@ -118,5 +118,29 @@ test('core: teams survive the end of a game', () => {
     lastApi.end([]);
     assert.strictEqual(s[0].last('lobby').state, 'lobby');
     assert.deepStrictEqual(teams(s[0]), [1, 1]);
+  } finally { core.close(); }
+});
+
+test('core: junk team values are ignored', () => {
+  const core = new Core({ fake: fakeGame, tg: teamGame });
+  try {
+    const s = room(core, 'tg', 1);
+    s[0].msg({ t: 'profile', team: 1 });
+    for (const v of [1.5, 'x', true, [], '2', null, NaN]) { s[0].msg({ t: 'profile', team: v }); assert.strictEqual(teams(s[0])[0], 1, String(v)); }
+  } finally { core.close(); }
+});
+
+test('core: team survives reconnect; profile.team ignored while playing', () => {
+  const core = new Core({ fake: fakeGame, tg: teamGame });
+  try {
+    const s = room(core, 'tg', 2);
+    s[1].msg({ t: 'profile', team: 3 });
+    const { token } = s[1].last('joined'), code = s[0].last('lobby').code;
+    s[1].close();
+    const n = sock(); core.connect(n); n.msg({ t: 'rejoin', code, token });
+    assert.deepStrictEqual(teams(n), [-1, 3]);
+    s[0].msg({ t: 'start' });
+    s[0].msg({ t: 'profile', team: 0 });
+    assert.deepStrictEqual(teams(s[0]), [-1, 3]);
   } finally { core.close(); }
 });

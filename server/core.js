@@ -115,8 +115,8 @@ class Core {
         if (m.name) p.name = String(m.name).trim().slice(0, 14) || p.name;
         if (m.av != null) p.av = Math.abs(m.av | 0) % AVATARS;
         if (m.ready != null) p.ready = !!m.ready;
-        if (m.team != null) {
-          const T = this.games[r.gameId].meta.teams, t = m.team | 0;
+        if (Number.isInteger(m.team)) {
+          const T = this.games[r.gameId].meta.teams, t = m.team;
           if (T && (t === -1 || (t >= 0 && t < T.count && [...r.players.values()].filter(q => q !== p && q.team === t).length < T.max))) p.team = t;
         }
         this.sync(r);
