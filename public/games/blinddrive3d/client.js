@@ -1,31 +1,23 @@
 // Blind Drive 3D client: builds the level from `init`, shows every team's car, drives your own car locally when
-// you are the driver (sent to the server at 20 Hz), and picks the camera by role. HUD and overlays come later;
-// for now a small role chip in the corner.
+// you are the driver (sent to the server at 20 Hz), picks the camera by role, and feeds the HUD (hud.js).
 import * as THREE from 'three';
 import { followSun } from '../../core3d/engine.js';
 import { buildWorld } from './world.js';
 import { makeCar, TEAM_COL } from './car.js';
+import { Hud } from './hud.js';
+import { sfx, vibrate } from '../../core3d/sfx.js';
 
 const BD = window.BD;
 const INTERP_MS = 110, SEND_T = .05, SPIN_T = 2;
-const css = `
-.bd-role{position:absolute;top:14px;left:14px;padding:6px 14px 8px;border-radius:16px;font-size:20px;color:#fff;line-height:1.05;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 5px 0 var(--ink),0 0 0 4px var(--ink);text-shadow:0 2px 0 rgba(20,30,50,.35)}
-.bd-role small{display:block;font-size:13px;opacity:.95}
-.bd-frost{position:absolute;inset:0;display:none;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  -webkit-mask-image:radial-gradient(ellipse 22% 22% at 50% 62%,transparent 55%,#000 100%);mask-image:radial-gradient(ellipse 22% 22% at 50% 62%,transparent 55%,#000 100%);
-  background:radial-gradient(ellipse 34% 30% at 50% 62%,rgba(236,243,250,0) 40%,rgba(236,243,250,.92) 100%)}
-.bd.drv .bd-frost{display:block}
-.bd .emote-btn{top:84px;bottom:auto}.bd .emote-panel{top:150px;bottom:auto}`;
 
-let ctx, L, style, roleEl, world = null, offFrame = null, building = null, gen = 0;
+let ctx, L, hud, world = null, offFrame = null, building = null, gen = 0;
 let st = null;            // current level: {track, teams, level, levels, theme}
 let me = { team: -1, role: 'nav' }, ph = '', lt = 0;
 let own = null;           // my car simulated locally while I drive: {x, z, a, v, lat}
-let sendAcc = 0, spinT = 0, lastSig = null, roleHtml = '';
+let sendAcc = 0, spinT = 0, rumbleT = 0;
 const cars = new Map();   // team id -> CarView
 const snaps = [];         // [{t: ms, cars: Map(team -> [x, z, a, v, flags])}]
 let queue = [];
-const keys = {};
 const focusPt = { x: 0, y: 0, z: 0, a: 0 };
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), wantPos = new THREE.Vector3(), wantLook = new THREE.Vector3();
 let camSnap = true, driverView = null;
@@ -40,14 +32,10 @@ const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000
 export async function mount(c) {
   ctx = c;
   const { ui, net } = ctx;
-  style = ui.h(`<style>${css}</style>`); document.head.appendChild(style);
   L = ui.layer('bd');
-  L.innerHTML = '<div class="bd-frost pass"></div><div class="bd-role pass"></div>';
-  roleEl = L.querySelector('.bd-role');
+  L.innerHTML = '<div class="bd-frost pass"></div>';
+  hud = new Hud(L, { isTouch: ctx.engine.isTouch, onSignal: k => net.game({ t: 'sig', k }) });
   ui.emoteControl(L, e => net.send({ t: 'emote', e }));
-  on(window, 'keydown', e => { keys[e.code] = true; });
-  on(window, 'keyup', e => { keys[e.code] = false; });
-  on(window, 'blur', () => { for (const k in keys) keys[k] = false; });
   offFrame = ctx.engine.onFrame(frame);
 }
 
@@ -58,8 +46,9 @@ export function unmount() {
   listeners.length = 0;
   gen++;
   teardown();
-  L && L.remove(); style && style.remove();
-  L = style = roleEl = null; roleHtml = ''; st = null; own = null; building = null; queue = []; snaps.length = 0;
+  hud && hud.destroy();
+  L && L.remove();
+  L = hud = null; st = null; own = null; building = null; queue = []; snaps.length = 0;
   me = { team: -1, role: 'nav' }; ph = ''; driverView = null;
   const cam = ctx.engine.camera; cam.fov = 42; cam.updateProjectionMatrix();
 }
@@ -103,7 +92,7 @@ async function startLevel(d) {
     world = w;
   } else { for (const c of cars.values()) c.dispose(); cars.clear(); }
   st = { track: d.track, teams: d.teams.map(t => ({ ...t, got: (t.got || []).slice() })), level: d.level, levels: d.levels, theme: d.theme, start: d.start };
-  me = d.me; ph = d.ph; lt = d.t0 || 0; snaps.length = 0; spinT = 0; sendAcc = 0; lastSig = null;
+  me = d.me; ph = d.ph; lt = d.t0 || 0; snaps.length = 0; spinT = 0; sendAcc = 0; rumbleT = 0;
   const views = await Promise.all(st.teams.map(t => makeCar(TEAM_COL[t.id] || TEAM_COL[0], avOf(t.driver))));
   if (my !== gen) { views.forEach(v => v.dispose()); return; }
   st.teams.forEach((t, k) => { cars.set(t.id, views[k]); world.scene.add(views[k].root); ridersOf(t); });
@@ -114,6 +103,7 @@ async function startLevel(d) {
   }
   const sp = d.start.find(s => s[0] === me.team);
   own = drives() && sp ? { x: sp[1], z: sp[2], a: sp[3], v: 0, lat: 0 } : null;
+  hud.setLevel(st); syncRole();
   camSnap = true; driverView = null;
   engine.setScene(world.scene);
   ctx.app.loaded(); ctx.ui.reveal();
@@ -139,6 +129,7 @@ function handle(d) {
       ph = d.ph;
       snaps.push({ t: performance.now(), cars: new Map(d.cars.map(c => [c[0], c])) });
       while (snaps.length > 40) snaps.shift();
+      hud.update(d, me);
       const mine = d.cars.find(c => c[0] === me.team);
       if (mine && drives()) {
         if (!own || ph !== 'race') own = { x: mine[1], z: mine[2], a: mine[3], v: ph === 'race' ? mine[4] : 0, lat: 0 };
@@ -156,6 +147,7 @@ function handle(d) {
       for (const [id, v] of cars) if (!st.teams.some(t => t.id === id)) { v.dispose(); cars.delete(id); }
       me = d.me;
       if (!drives()) own = null;
+      syncRole();
       // a new driver: rebuild that car with the new driver's animal at the wheel
       for (const t of st.teams) if (was.get(t.id) !== t.driver) {
         const my = gen;
@@ -169,12 +161,31 @@ function handle(d) {
     }
     case 'fx': {
       const t = st.teams.find(x => x.id === d.team);
-      if (d.kind === 'pick' && t) { if (!t.got.includes(d.i)) t.got.push(d.i); ridersOf(t); if (d.team === me.team) hideStop(d.i); }
-      else if (d.kind === 'coin' && d.team === me.team && world.coins[d.i]) world.coins[d.i].visible = false;
-      else if (d.kind === 'spin') { const v = cars.get(d.team); if (v) v.spin(SPIN_T); if (d.team === me.team && own) spinT = SPIN_T; }
+      if (d.kind === 'pick' && t) {
+        if (!t.got.includes(d.i)) t.got.push(d.i);
+        ridersOf(t);
+        if (d.team === me.team) {
+          hideStop(d.i);
+          const code = st.track.stops[d.i].kind, a = window.ANIMALS[code];
+          sfx.animal(a ? a.id : 'pig');
+          hud.feed(`${ctx.ui.esc(a ? a.name : 'A passenger')} climbed in!`, '#ffe9a6');
+        }
+      } else if (d.kind === 'coin' && d.team === me.team) {
+        if (world.coins[d.i]) world.coins[d.i].visible = false;
+        sfx.beep(1320, .12, 'triangle', .1, 500);
+      } else if (d.kind === 'spin') {
+        const v = cars.get(d.team); if (v) v.spin(SPIN_T);
+        if (d.team === me.team) {
+          if (own) spinT = SPIN_T;
+          sfx.splash();
+          if (drives()) vibrate(120);
+          hud.feed('Spin-out! Hold on…', '#ffd0d4');
+        }
+      }
       break;
     }
-    case 'sig': lastSig = d.k; break;
+    case 'sig': hud.showSignal(d.k, nameOf(d.from)); break;
+    case 'sent': hud.sent(d.k); break;
   }
 }
 
@@ -193,12 +204,46 @@ function interp(team, now) {
   return pose(a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + da * k);
 }
 
+// Role, team name and partner names for the HUD.
+function syncRole() {
+  const t = st.teams.find(x => x.id === me.team);
+  const partners = !t ? [] : me.role === 'nav' ? [nameOf(t.driver)] : t.members.filter(id => id !== ctx.net.myId).map(nameOf);
+  hud.setRole(me.role, t ? t.name : 'No', partners);
+}
+
+// What the driver can feel: crossing animals on the road ahead (<= 12 m), slicks ahead (<= 8 m), the grass edge
+// near the 6 m limit. Returns 0..1 closeness only, never a direction.
+function nearby(env) {
+  const tr = st.track, fx = Math.sin(own.a), fz = Math.cos(own.a);
+  let d = 0;
+  for (const c of tr.crossers || []) {
+    const p = BD.crosserPos(tr, c, lt);
+    if (!p.onRoad) continue;
+    const dx = p.x - own.x, dz = p.z - own.z, dist = Math.hypot(dx, dz);
+    if (dx * fx + dz * fz > 0 && dist < 12) d = Math.max(d, 1 - dist / 12);
+  }
+  for (const sl of tr.slicks || []) {
+    const dx = sl.x - own.x, dz = sl.z - own.z, dist = Math.hypot(dx, dz);
+    if ((dx * fx + dz * fz > 0 || env.slick) && dist < 8) d = Math.max(d, 1 - dist / 8);
+  }
+  d = Math.max(d, Math.max(0, Math.min(1, env.edge + tr.rw - 5))); // 5 m from the centre line up to the 6 m limit
+  return d;
+}
+
 function drive(dt) {
-  if (!own || ph !== 'race') return;
-  if (spinT > 0) { spinT -= dt; own.v = 0; own.lat = 0; return; }
-  const steer = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
-  const inp = { steer, gas: keys.KeyW || keys.ArrowUp ? 1 : 0, brake: keys.KeyS || keys.ArrowDown ? 1 : 0, rev: keys.KeyR ? 1 : 0 };
-  BD.stepCar(own, inp, BD.envAt(st.track, own.x, own.z, own.a), dt);
+  if (!own) { hud.speed(0); hud.danger(0); return; }
+  if (ph !== 'race') { hud.speed(0); hud.danger(0); return; }
+  const env = BD.envAt(st.track, own.x, own.z, own.a);
+  hud.danger(nearby(env)); hud.syncButtons();
+  const slope = env.slope;
+  hud.feel(env.slick ? 'Slippery!' : env.off ? 'Off road!' : slope > .06 ? 'Uphill' : slope < -.06 ? 'Downhill' : 'Flat',
+    env.slick ? '#4fb4ff' : env.off ? '#ff5d6c' : slope > .06 ? '#ff8a4c' : slope < -.06 ? '#9a7cff' : '#55b360');
+  if (spinT > 0) { spinT -= dt; own.v = 0; own.lat = 0; hud.speed(0); return; }
+  const inp = hud.input();
+  BD.stepCar(own, inp, env, dt);
+  hud.speed(own.v);
+  rumbleT -= dt; // rumble on grass
+  if (env.off && Math.abs(own.v) > .5 && rumbleT <= 0) { rumbleT = .12; sfx.beep(60 + Math.random() * 25, .1, 'sawtooth', .05); }
   sendAcc = Math.min(sendAcc + dt, SEND_T * 2);
   if (sendAcc >= SEND_T) {
     sendAcc -= SEND_T;
@@ -247,14 +292,4 @@ function frame(dt) {
   }
   const fov = cam.aspect < .9 ? 62 : 45;
   if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
-  // role chip (the HUD replaces this later)
-  const t = st.teams.find(x => x.id === me.team);
-  const role = me.role === 'driver' ? 'DRIVER' : me.role === 'solo' ? 'SOLO DRIVER' : 'NAVIGATOR';
-  const key = `${me.role}|${t ? t.id : -1}|${st.level}|${ph}|${lastSig}`;
-  if (roleHtml !== key) {
-    roleHtml = key;
-    const sub = `${t ? t.name + ' team' : 'Watching'} · Level ${st.level}/${st.levels} · ${ph}${lastSig != null && me.role === 'driver' ? ' · signal ' + lastSig : ''}`;
-    roleEl.innerHTML = `${role}<small>${ctx.ui.esc(sub)}</small>`;
-  }
-  roleEl.style.background = t ? TEAM_COL[t.id] : '#8c96a8';
 }
