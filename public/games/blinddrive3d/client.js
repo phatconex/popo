@@ -5,13 +5,14 @@ import { followSun } from '../../core3d/engine.js';
 import { buildWorld } from './world.js';
 import { makeCar, TEAM_COL } from './car.js';
 import { Hud } from './hud.js';
+import { Overlays } from './overlays.js';
 import { sfx, vibrate } from '../../core3d/sfx.js';
 
 const BD = window.BD;
 const OFF_LIMIT = 6; // metres from the centre line where the server spins you out
 const INTERP_MS = 110, SEND_T = .05, SPIN_T = 2;
 
-let ctx, L, hud, world = null, offFrame = null, building = null, gen = 0;
+let ctx, L, hud, ov, podium = null, world = null, offFrame = null, building = null, gen = 0;
 let st = null;            // current level: {track, teams, level, levels, theme}
 let me = { team: -1, role: 'nav' }, ph = '', lt = 0;
 let own = null;           // my car simulated locally while I drive: {x, z, a, v, lat}
@@ -36,6 +37,7 @@ export async function mount(c) {
   L = ui.layer('bd');
   L.innerHTML = '<div class="bd-frost pass"></div>';
   hud = new Hud(L, { isTouch: ctx.engine.isTouch, onSignal: k => net.game({ t: 'sig', k }) });
+  ov = new Overlays(L, { sfx, isTouch: ctx.engine.isTouch });
   ui.emoteControl(L, e => net.send({ t: 'emote', e }));
   offFrame = ctx.engine.onFrame(frame);
 }
@@ -47,9 +49,11 @@ export function unmount() {
   listeners.length = 0;
   gen++;
   teardown();
+  ov && ov.close();
+  if (podium) { podium.dispose(); podium = null; }
   hud && hud.destroy();
   L && L.remove();
-  L = hud = null; st = null; own = null; building = null; queue = []; snaps.length = 0;
+  L = hud = ov = null; st = null; own = null; building = null; queue = []; snaps.length = 0;
   me = { team: -1, role: 'nav' }; ph = ''; driverView = null;
   const cam = ctx.engine.camera; cam.fov = 42; cam.updateProjectionMatrix();
 }
@@ -106,7 +110,10 @@ async function startLevel(d) {
   own = drives() && sp ? { x: sp[1], z: sp[2], a: sp[3], v: 0, lat: 0 } : null;
   hud.setLevel(st, me); syncRole();
   camSnap = true; driverView = null;
+  if (podium) { podium.dispose(); podium = null; L.classList.remove('final'); }
+  ov.close();
   engine.setScene(world.scene);
+  if (d.ph === 'ready') ov.getReady(d.level, d.levels, d.theme, st.teams.map(t => ({ id: t.id, name: t.name, driver: nameOf(t.driver), callers: t.members.filter(m => m !== t.driver).map(nameOf) })), me);
   ctx.app.loaded(); ctx.ui.reveal();
   building = null;
   const q = queue; queue = [];
@@ -131,6 +138,7 @@ function handle(d) {
       snaps.push({ t: performance.now(), cars: new Map(d.cars.map(c => [c[0], c])) });
       while (snaps.length > 40) snaps.shift();
       hud.update(d, me);
+      ov.phase(d);
       const mine = d.cars.find(c => c[0] === me.team);
       if (mine && drives()) {
         if (!own || ph !== 'race') own = { x: mine[1], z: mine[2], a: mine[3], v: ph === 'race' ? mine[4] : 0, lat: 0 };
@@ -171,6 +179,8 @@ function handle(d) {
           sfx.animal(a ? a.id : 'pig');
           hud.feed(`${ctx.ui.esc(a ? a.name : 'A passenger')} climbed in!`, '#ffe9a6');
         }
+      } else if (d.kind === 'finish') {
+        if (t && t.members.includes(ctx.net.myId)) ov.finishBanner(d.i);
       } else if (d.kind === 'coin' && d.team === me.team) {
         if (world.coins[d.i]) world.coins[d.i].visible = false;
         sfx.beep(1320, .12, 'triangle', .1, 500);
@@ -185,6 +195,8 @@ function handle(d) {
       }
       break;
     }
+    case 'level': ov.levelResults(d.rows, d.level, st.levels); break;
+    case 'final': showPodium(d); break;
     case 'sig': hud.showSignal(d.k, nameOf(d.from)); break;
     case 'sent': hud.sent(d.k); break;
   }
@@ -259,7 +271,18 @@ function setView(drv) {
   L.classList.toggle('drv', drv);
 }
 
-function frame(dt) {
+async function showPodium(d) {
+  const my = gen, o = ov, lobby = ctx.app.lobby;
+  L.classList.add('final');
+  const p = await o.podium(d.rows, { players: lobby ? lobby.players : [], engine: ctx.engine, alive: () => my === gen && !podium });
+  if (!p) return;
+  if (my !== gen) { p.dispose(); return; }
+  podium = p;
+  ctx.engine.setScene(p.scene);
+}
+
+function frame(dt, t) {
+  if (podium) { podium.tick(dt, t); return; }
   if (!world || !st || building) return;
   const now = performance.now(), hills = st.track.hills || [], cam = ctx.engine.camera;
   lt += dt;
