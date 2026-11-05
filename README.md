@@ -42,9 +42,20 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
   Phone: joystick on the left, buttons on the right; seekers tap the ground to squirt.
 - Quick test timings: `HS_HIDE_T=5 HS_ROUND_T=45 npm start`.
 
+## Blind Drive (2–8 players, teams)
+- Pick a team in the lobby (Red, Blue, Green, Yellow; 2–3 per team, leftovers are placed automatically).
+- In each team one player **drives blind** — they only see their own car in thick fog — and the others **call the turns** while seeing the whole road.
+- All teams race the same road at once as ghost cars. Pick up passengers at the pink rings (stop inside for a moment), grab coins, mind slippery puddles,
+  animals crossing and hills. Hitting an animal or leaving the road spins you out for 2 s.
+- Points per level: finish place 300 / 200 / 120 / 60, +100 per passenger, +10 per coin. Roles rotate every level; podium at the end.
+- Maps: Country Road, Snowy Pass, Beach Town, Night City. Settings: levels (2/4/6) and signal delay.
+- Controls — driver: A/D or arrows to steer, W gas, S brake, R reverse (buttons on phones).
+  Navigator: A left, D right, W straight, E faster, Q slow, S stop, R reverse, Space pick up (buttons on phones).
+- Quick test: `BD_FAST=1 PORT=3101 node server/index.js` then `node test/bot-match.js --drive 3101 4`.
+
 ## The app
 - Open screen → Play (new room) or Join Room (4-letter code or `?room=ABCD` invite link).
-- 3D lobby with up to 12 players: pick one of 24 animals, Ready, host picks map and rounds, Start.
+- 3D lobby with up to 12 players: pick one of 24 animals, Ready, host picks the game and its settings, Start.
 - Dropped connection (switching apps, reload, bad signal): your seat is kept for 30 s and you rejoin the same round.
 - 8 emotes for everyone in the room.
 
@@ -55,10 +66,12 @@ Critter Badminton is paused while it moves to 3D (its code stays in `server/game
 server/index.js               static files + WebSocket, game registry
 server/core.js                rooms, rejoin, ready flag, emotes, settings
 server/games/hideseek/        rules (index.js) + map generator (maps.js)
+server/games/blinddrive/      race rules (index.js) + track generator (track.js)
 public/index.html, app.js     page shell + screen router
 public/core3d/                engine, asset loader, network, UI kit, sound, animals table (shared with the server)
 public/core3d/screens/        Open and Lobby screens
 public/games/hideseek3d/      world builder, entities, HUD, effects, overlays
+public/games/blinddrive3d/    shared physics (shared.js, also used by the server), world, car, HUD, overlays
 public/assets/kenney/         3D models (Kenney, CC0) + licenses
 test/                         node:test unit tests + bot match script
 docs/superpowers/             design spec and implementation plan
