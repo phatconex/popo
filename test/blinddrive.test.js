@@ -84,3 +84,71 @@ test('THEMES covers the four maps', () => {
   for (const k of ['country', 'snow', 'beach', 'night']) assert.ok(BD.THEMES[k].crossers.length && BD.THEMES[k].riders.length && BD.THEMES[k].hills.length === 4);
   assert.deepStrictEqual(BD.THEMES.snow.hills, [4, 5, 3.5, 5]);
 });
+
+// ---- Track generator ----
+const { genTrack } = require('../server/games/blinddrive/track.js');
+const THEME_NAMES = ['country', 'snow', 'beach', 'night'];
+
+function segsIntersect(p1, p2, p3, p4) {
+  const o = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const d1 = o(p3, p4, p1), d2 = o(p3, p4, p2), d3 = o(p1, p2, p3), d4 = o(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+test('genTrack: 200 seeds x 4 themes x levels 0-5', () => {
+  for (let seed = 1; seed <= 200; seed++) for (const theme of THEME_NAMES) for (let level = 0; level <= 5; level++) {
+    const t = genTrack(theme, level, seed * 31 + level), pts = t.pts, n = pts.length;
+    const tag = `${theme} L${level} seed ${seed}`;
+    let len = 0;
+    for (let k = 0; k < n - 1; k++) {
+      const d = Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
+      assert.ok(Math.abs(d - 2) <= .01, `${tag}: step ${k} is ${d}`);
+      len += d;
+    }
+    assert.ok(Math.abs(len - Math.min(330, 180 + 30 * level)) <= 2, `${tag}: length ${len}`);
+    for (let k = 0; k < n; k++) {
+      const [a, b] = k < n - 1 ? [pts[k], pts[k + 1]] : [pts[k - 1], pts[k]];
+      const sl = BD.slopeAlong(t.hills, pts[k][0], pts[k][1], Math.atan2(b[0] - a[0], b[1] - a[1]));
+      assert.ok(Math.abs(sl) <= .22, `${tag}: slope ${sl} at ${k}`);
+    }
+    for (let k = 0; k < n - 1; k++) for (let m = k + 2; m < n - 1; m++) {
+      if (Math.abs(pts[k][0] - pts[m][0]) > 4 || Math.abs(pts[k][1] - pts[m][1]) > 4) continue; // far apart
+      assert.ok(!segsIntersect(pts[k], pts[k + 1], pts[m], pts[m + 1]), `${tag}: segments ${k} and ${m} cross`);
+    }
+  }
+});
+
+test('genTrack: objects spaced and placed', () => {
+  const nearestI = (t, x, z) => { let bi = 0, bd = Infinity; t.pts.forEach((p, i) => { const d = (p[0] - x) ** 2 + (p[1] - z) ** 2; if (d < bd) { bd = d; bi = i; } }); return bi; };
+  for (let seed = 1; seed <= 100; seed++) for (const theme of THEME_NAMES) for (let level = 0; level <= 5; level++) {
+    const t = genTrack(theme, level, seed * 17 + level), n = t.pts.length, tag = `${theme} L${level} seed ${seed}`;
+    assert.strictEqual(t.finishI, n - 6);
+    assert.ok(Math.abs(t.rw - Math.max(1.5, 1.9 - .08 * level)) < 1e-9, `${tag}: rw`);
+    assert.strictEqual(t.coins.length, 20);
+    const rows = [0, 1, 2, 3].map(r => nearestI(t, t.coins[r * 5 + 2][0], t.coins[r * 5 + 2][1]));
+    const slickN = theme === 'snow' ? 4 : 2;
+    const items = [...t.stops.map(s => s.i), ...rows, ...t.slicks.map(s => nearestI(t, s.x, s.z)), ...t.crossers.map(c => c.i)];
+    assert.strictEqual(t.stops.length, level >= 2 ? 4 : 3, `${tag}: stops`);
+    assert.strictEqual(t.crossers.length, 2);
+    // slicks may be reduced on the shortest tracks when 14 m spacing cannot fit them all
+    assert.ok(t.slicks.length <= slickN && t.slicks.length >= 2, `${tag}: slicks ${t.slicks.length}`);
+    if (level >= 1 || theme !== 'snow') assert.strictEqual(t.slicks.length, slickN, `${tag}: slicks`);
+    for (const i of items) assert.ok(i >= 6 && i <= t.finishI - 5, `${tag}: object at ${i}`);
+    for (let a = 0; a < items.length; a++) for (let b = a + 1; b < items.length; b++)
+      assert.ok(Math.abs(items[a] - items[b]) * 2 >= 14, `${tag}: objects ${items[a]} and ${items[b]} too close`);
+    for (const s of t.stops) { assert.ok(s.side === 1 || s.side === -1); assert.ok(BD.THEMES[theme].riders.includes(s.kind)); }
+    for (const c of t.crossers) { assert.ok(BD.THEMES[theme].crossers.includes(c.kind)); assert.ok(c.spd >= 1.2 && c.spd <= 1.8 && c.ph >= 0 && c.ph <= 10); }
+    for (const s of t.slicks) { assert.ok(s.rz >= 1.6 && s.rz <= 2.2 && s.rx >= 1 && s.rx <= t.rw); }
+    const [hMin, hMax, h0, h1] = BD.THEMES[theme].hills;
+    assert.ok(t.hills.length >= hMin && t.hills.length <= hMax);
+    for (const h of t.hills) {
+      assert.ok(h.s >= 8 && h.s <= 11.5 && h.h <= h1 + 1e-9 && h.h > 0);
+      assert.ok(Math.hypot(h.x - t.pts[0][0], h.z - t.pts[0][1]) >= 20 && Math.hypot(h.x - t.pts[n - 1][0], h.z - t.pts[n - 1][1]) >= 20);
+    }
+  }
+});
+
+test('genTrack: same seed gives same track', () => {
+  for (const theme of THEME_NAMES) assert.deepStrictEqual(genTrack(theme, 3, 12345), genTrack(theme, 3, 12345));
+  assert.notDeepStrictEqual(genTrack('country', 0, 1).pts, genTrack('country', 0, 2).pts);
+});

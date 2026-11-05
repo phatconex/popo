@@ -84,7 +84,7 @@
     return { i, dist, side, s: pts.length > 1 ? i / (pts.length - 1) : 0 };
   }
 
-  // Slick ellipses: {x, z, rx, rz, a} with rx along heading a, rz across it.
+  // Slick ellipses: {x, z, rx, rz, a}: rz is the half-length along heading a, rx the half-width across it.
   function inSlick(sl, x, z) {
     const dx = x - sl.x, dz = z - sl.z, a = sl.a || 0, c = Math.cos(a), s = Math.sin(a);
     const u = dx * c - dz * s, w = dx * s + dz * c;
