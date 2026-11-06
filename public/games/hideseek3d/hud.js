@@ -3,18 +3,16 @@ import { h } from '../../core3d/ui.js';
 
 const ICON = {
   run: '<svg viewBox="0 0 24 24" fill="#fff"><path d="M13 4a2 2 0 1 0 4 0 2 2 0 0 0-4 0M9 21l2-6 3 2v5h2v-6l-3-3 1-3 2 2h4v-2h-3l-3-3c-1-1-2-1-3 0L7 9v4h2v-3l2-1-3 9z"/></svg>',
-  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>',
   say: '<svg viewBox="0 0 24 24" fill="#fff"><path d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>',
-  sleep: '<svg viewBox="0 0 24 24" fill="#fff"><path d="M4 4h7v2l-4 5h4v2H4v-2l4-5H4zM13 11h6v2l-3 4h3v2h-6v-2l3-4h-3z"/></svg>',
   decoy: '<svg viewBox="0 0 24 24" fill="#fff"><circle cx="8" cy="10" r="4"/><circle cx="16" cy="10" r="4" opacity=".55"/><rect x="4" y="15" width="8" height="5" rx="2"/><rect x="12" y="15" width="8" height="5" rx="2" opacity=".55"/></svg>',
   listen: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M6 15a6 6 0 1 1 10-4c0 3-3 3-3 6a3 3 0 0 1-5 2"/><path d="M10 11a2 2 0 1 1 3 1.7"/></svg>',
 };
 export const ACTS = {
-  hider: [['run', 'Run', 'Shift'], ['swap', 'Swap', 'E'], ['say', 'Call', 'Q'], ['sleep', 'Sleep', 'Z'], ['decoy', 'Decoy', 'F']],
+  hider: [['run', 'Run', 'Shift'], ['say', 'Call', 'Q'], ['decoy', 'Decoy', 'F']],
   seeker: [['listen', 'Listen', 'R']],
 };
-export const COOLDOWN = { say: 8, sleep: 25, decoy: 20, listen: 25 };
-export const KEYMAP = { ShiftLeft: 'run', ShiftRight: 'run', KeyE: 'swap', KeyQ: 'say', KeyZ: 'sleep', KeyF: 'decoy', KeyR: 'listen' };
+export const COOLDOWN = { say: 8, decoy: 20, listen: 25 };
+export const KEYMAP = { ShiftLeft: 'run', ShiftRight: 'run', KeyQ: 'say', KeyF: 'decoy', KeyR: 'listen' };
 
 export class Hud {
   constructor(L, { isTouch, onAction }) {
@@ -53,8 +51,10 @@ export class Hud {
     this.$('.hs-hp').style.display = role === 'seeker' && alive ? 'block' : 'none';
     this.$('.hs-spec').style.display = alive ? 'none' : 'block';
     this.$('.hs-keys').innerHTML = role === 'hider'
-      ? 'WASD to walk like an animal. <b>Shift = run (leaves footprints!)</b> · E swap · Q call · Z sleep · F decoy'
-      : 'WASD to move · <b>click to squirt water</b> · R listen. Hitting a real animal costs water!';
+      ? 'WASD to walk like an animal. <b>Shift = run (leaves footprints!)</b> · Q call (−3 s, but the seeker sees where) · F decoy'
+      : 'WASD to move · <b>click to squirt water</b> · R listen: the wave turns <b style="color:#ff5d6c">red</b> if a hider is inside it. An arrow shows where a hider called.';
+    // the Run button may vanish under a finger (caught, new role): its pointerup never comes, so let go here
+    this.runHeld = false;
     const box = this.$('.hs-acts'); box.innerHTML = ''; this.btns = {};
     if (!alive) return;
     ACTS[role].forEach(([id, label, key], i) => {

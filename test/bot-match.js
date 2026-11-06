@@ -2,6 +2,7 @@
 //   Full match:   HS_HIDE_T=2 HS_ROUND_T=20 PORT=3100 node server/index.js  &&  node test/bot-match.js 3100
 //   Blind Drive:  BD_FAST=1 PORT=3101 node server/index.js  &&  node test/bot-match.js --drive 3101 4   (N = 3 or 4 bots)
 //   Fill a lobby: node test/bot-match.js --lobby ABCD 3000 11   (11 bots join room ABCD and idle; Ctrl+C to stop)
+//   Bot-hosted:   node test/bot-match.js --host 3000 1 [map]    (a bot opens a room and starts when you press Ready)
 const WebSocket = require('ws');
 const args = process.argv.slice(2);
 
@@ -87,20 +88,52 @@ async function joinPlay(code, port, n) {
     const b = bot(port, 'Bot ' + (i + 1), (i * 7 + 3) % 24); await b.open;
     b.send({ t: 'join', name: b.name, av: b.av, code });
     b.send({ t: 'profile', ready: true });
-    let s = null, id = 0, dir = [0, 0];
+    wander(b);
+  }
+  console.log(`${n} bots playing in ${code}. Ctrl+C to stop.`);
+}
+
+// A bot hosts a Hide & Seek room (Time = 2 min) and starts each match once every human in it is Ready;
+// n - 1 more bots join and play: node test/bot-match.js --host 3000 1 [map]
+async function hostPlay(port, n, map = 'random') {
+  const host = bot(port, 'Bot 1', 3); await host.open;
+  host.send({ t: 'join', name: host.name, av: host.av, game: 'hideseek' });
+  const code = (await until(host, m => m.t === 'joined')).code;
+  host.send({ t: 'settings', settings: { map, rounds: 'auto', time: '120' } });
+  host.send({ t: 'profile', ready: true });
+  const botIds = new Set([host.msgs.find(m => m.t === 'joined').id]);
+  wander(host);
+  for (let i = 1; i < n; i++) {
+    const b = bot(port, 'Bot ' + (i + 1), (i * 7 + 3) % 24); await b.open;
+    b.send({ t: 'join', name: b.name, av: b.av, code });
+    botIds.add((await until(b, m => m.t === 'joined')).id);
+    b.send({ t: 'profile', ready: true });
+    wander(b);
+  }
+  host.on(m => {
+    if (m.t !== 'lobby' || m.state !== 'lobby') return;
+    const humans = m.players.filter(p => !botIds.has(p.id) && p.on !== false);
+    if (humans.length && humans.every(p => p.ready)) setTimeout(() => host.send({ t: 'start' }), 800);
+  });
+  console.log(`room ${code}: http://localhost:${port}/?room=${code}  (press Ready to start; Ctrl+C to stop)`);
+}
+
+// Play loop shared by joinPlay / hostPlay: wander around, and shoot at the nearest animal now and then when seeker.
+function wander(b) {
+    let s = null, id = (b.msgs.find(m => m.t === 'joined') || {}).id || 0, dir = [0, 0];
+    b.on(m => { if (m.t === 'lobby' && m.state === 'lobby' && id && m.players.some(p => p.id === id && !p.ready)) b.send({ t: 'profile', ready: true }); });
     b.on(m => { if (m.t === 'joined') id = m.id; if (m.t === 'g' && m.d.t === 's') s = m.d; });
     setInterval(() => {
       if (!s) return;
       if (Math.random() < .3) dir = Math.random() < .3 ? [0, 0] : [Math.random() * 2 - 1, Math.random() * 2 - 1];
       b.send({ t: 'g', d: { t: 'in', mx: dir[0], my: dir[1], run: false } });
+      if (s.me.role === 'hider' && s.me.alive && s.ph === 'playing' && !s.me.cd.say && Math.random() < .1) b.send({ t: 'g', d: { t: 'say' } }); // call now and then
       if (s.me.role === 'seeker' && s.ph === 'playing' && s.e.length && Math.random() < .08) {
         const me = s.k.find(k => k[0] === id); if (!me) return;
         const near = s.e.map(e => [e, Math.hypot(e[1] - me[2], e[2] - me[3])]).sort((x, y) => x[1] - y[1])[0][0];
         b.send({ t: 'g', d: { t: 'shoot', x: near[1], y: near[2] } });
       }
     }, 600);
-  }
-  console.log(`${n} bots playing in ${code}. Ctrl+C to stop.`);
 }
 
 // Blind Drive full match: N bots (3 or 4) in teams, 2 levels. Drivers steer along the track, navigators send signals.
@@ -191,6 +224,7 @@ async function drive(port, n) {
 }
 
 if (args[0] === '--drive') drive(+args[1] || 3101, +args[2] || 4).catch(e => { console.error('FAIL', e.message); process.exit(1); });
+else if (args[0] === '--host') hostPlay(+args[1] || 3000, +args[2] || 1, args[3]);
 else if (args[0] === '--join') joinPlay(args[1], +args[2] || 3000, +args[3] || 3);
 else if (args[0] === '--lobby') lobbyOnly(args[1], +args[2] || 3000, +args[3] || 11);
 else match(+args[0] || 3100).catch(e => { console.error('FAIL', e.message); process.exit(1); });

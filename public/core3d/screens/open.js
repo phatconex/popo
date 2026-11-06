@@ -61,7 +61,7 @@ export async function enter(ctx) {
   const mute = L.querySelector('[data-a=mute]');
   mute.onclick = () => { sfx.setMuted(!sfx.muted); mute.innerHTML = sfx.muted ? SOUND_OFF : SOUND_ON; };
 
-  let started = false, startedAt = 0, dlg = null;
+  let started = false, startedAt = 0, dlg = null, clock = 0; // clock is set every frame; declared here because an invite link calls start() right away
   const start = () => {
     if (started) return; started = true; startedAt = clock;
     L.querySelector('.op-tap').style.opacity = 0; menu.classList.add('on'); star.play('gesture-positive'); sfx.pop();
@@ -98,7 +98,7 @@ export async function enter(ctx) {
       body: `<div class="op-how">
         <div><span><b style="background:#55d36b">HIDERS</b> look exactly like the farm animals. Walk slowly, stay with the herd, hide behind trees. Running leaves footprints!</span></div>
         <div><span><b style="background:#ff5d6c">SEEKER</b> has a water gun. Squirt the fakes — but hitting a real animal costs water.</span></div>
-        <div><span>Hiders get tricks: <b style="background:#4fb4ff">Swap</b> <b style="background:#ffb81f">Call</b> <b style="background:#9a7cff">Sleep</b> <b style="background:#55d36b">Decoy</b>. Everyone takes a turn as the seeker.</span></div>
+        <div><span>Hiders get tricks: <b style="background:#ff8a4c">Run</b> <b style="background:#ffb81f">Call</b> <b style="background:#55d36b">Decoy</b>. Calling takes 3 s off the clock but shows the seeker where you are. Everyone takes a turn as the seeker.</span></div>
       </div>`,
     });
   }
@@ -107,7 +107,6 @@ export async function enter(ctx) {
   const q = new URLSearchParams(location.search).get('room');
   if (q && /^[A-Za-z]{4}$/.test(q)) { history.replaceState(null, '', location.pathname); start(); askName(true, q.toUpperCase()); }
 
-  let clock = 0;
   const off = engine.onFrame((dt, t) => {
     clock = t;
     for (const p of pets) {

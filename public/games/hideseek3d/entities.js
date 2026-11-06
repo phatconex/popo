@@ -2,7 +2,7 @@
 // Positions are interpolated ~110 ms behind the newest snapshot so movement stays smooth at 20 updates/s.
 import * as THREE from 'three';
 import { pet } from '../../core3d/assets.js';
-import { tag } from '../../core3d/ui.js';
+import { tag, esc } from '../../core3d/ui.js';
 import { U } from './world.js';
 
 const DELAY = 110;
@@ -87,13 +87,13 @@ export class Entities {
       const pom = new THREE.Mesh(new THREE.SphereGeometry(.06, 10, 8), new THREE.MeshStandardMaterial({ color: '#ffffff' })); pom.position.y = .36;
       const band = new THREE.Mesh(new THREE.TorusGeometry(.16, .03, 6, 18), new THREE.MeshStandardMaterial({ color: '#ffffff' })); band.rotation.x = Math.PI / 2; band.position.y = .02;
       hat.add(cone, pom, band); hat.position.set(0, .86, .02); hat.rotation.z = -.18; hat.traverse(m => { if (m.isMesh) m.castShadow = true; }); add(hat);
-      ent.tagEl = tag(root, `<span class="nametag" style="background:${col}">${ent.seeker.name}</span>`, { y: 1.5 });
+      ent.tagEl = tag(root, `<span class="nametag" style="background:${col}">${esc(ent.seeker.name)}</span>`, { y: 1.5 });
     } else if (ent.key === this.ownKey) {
       add(ring('#ffffff', .4)).userData.self = true;
       ent.tagEl = tag(root, '<span class="nametag hs-self" style="background:#4fb4ff">You</span>', { y: 1.08 });
     } else if (this.mates.has(ent.key)) {
       add(ring('#9fe6ff', .38));
-      ent.tagEl = tag(root, `<span class="nametag hs-mate" style="background:#3fa9d8">${this.mates.get(ent.key)}</span>`, { y: 1.08 });
+      ent.tagEl = tag(root, `<span class="nametag hs-mate" style="background:#3fa9d8">${esc(this.mates.get(ent.key))}</span>`, { y: 1.08 });
     }
   }
 

@@ -7,11 +7,12 @@ import { Entities } from './entities.js';
 import { Fx, SOUND } from './fx.js';
 import { Hud, KEYMAP } from './hud.js';
 import { Overlays } from './overlays.js';
+import { esc } from '../../core3d/ui.js';
 
 let ctx, L, hud, ov, world = null, ents = null, fx = null, podium = null;
-let st = null, snap = null, seed = null, building = null, queue = [], offFrame = null;
+let st = null, snap = null, seed = null, building = null, queue = [], offFrame = null, buildId = 0; // buildId: bumped by every init/unmount so stale async work bails out
 const keys = {};
-let firing = null, lastShot = 0, lastInput = '', lastInputT = 0, aim = new THREE.Vector3(), aimOk = false, reticle = null;
+let firing = null, lastShot = 0, lastInput = '', lastInputT = 0, aim = new THREE.Vector3(), aimOk = false, reticle = null, arrow = null;
 const camT = new THREE.Vector3();
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const listeners = [];
@@ -37,6 +38,7 @@ export async function mount(c) {
 
 export function unmount() {
   if (offFrame) offFrame();
+  buildId++;
   for (const [el, ev, fn, o] of listeners) el.removeEventListener(ev, fn, o);
   listeners.length = 0;
   teardownWorld();
@@ -57,30 +59,33 @@ export function onEmote(id, e) {
   const s = ents.get('k' + id);
   if (s && s.pet) ctx.ui.emoteOn(s.pet.root, e, 1.5);
   else if (id === ctx.net.myId && snap && snap.me.role === 'hider') { const o = ents.get('e' + snap.me.eid); if (o && o.pet) ctx.ui.emoteOn(o.pet.root, e, 1.35); }
-  else ctx.ui.toast(`<svg viewBox="0 0 48 48" style="width:26px;height:26px;vertical-align:middle"><use href="#e-${e}"/></svg> ${(ctx.app.lobby.players.find(p => p.id === id) || {}).name || ''}`);
+  else ctx.ui.toast(`<svg viewBox="0 0 48 48" style="width:26px;height:26px;vertical-align:middle"><use href="#e-${e}"/></svg> ${esc((ctx.app.lobby.players.find(p => p.id === id) || {}).name || '')}`);
 }
 
 function teardownWorld() {
   if (ents) ents.clear(); if (fx) fx.clear();
   if (world) world.dispose();
-  world = ents = fx = reticle = null;
+  world = ents = fx = reticle = arrow = null;
 }
 
 async function startRound(d) {
-  const { engine } = ctx;
+  const { engine } = ctx, my = ++buildId;
   if (podium) { podium.dispose(); podium = null; }
   L.classList.remove('final');
   ov.closeRound();
   st = { role: d.role, round: d.round, total: d.total, map: d.map };
   if (seed !== d.map.seed || !world) {
     teardownWorld();
-    world = await buildWorld(d.map, engine.quality);
+    const w = await buildWorld(d.map, engine.quality);
+    if (my !== buildId || !L) { w.dispose(); return; } // a newer round (or leaving the game) took over meanwhile
+    world = w;
     seed = d.map.seed;
     ents = new Entities(world.scene);
     fx = new Fx(world.scene);
     reticle = new THREE.Group();
     for (const [r, c] of [[.32, '#ffffff'], [.18, '#ff5d6c']]) { const m = new THREE.Mesh(new THREE.RingGeometry(r, r + .1, 32), new THREE.MeshBasicMaterial({ color: c, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.y = .05 + r * .01; reticle.add(m); }
     reticle.visible = false; world.scene.add(reticle);
+    arrow = callArrow(); world.scene.add(arrow);
     camT.set(d.map.spawn.x * U, 0, d.map.spawn.y * U);
     ov.roleCard(d.role, d.round, d.total, d.map.theme);
   } else ents.clear(); // same round re-sent (rejoin): rebuild entities from the next snapshot
@@ -123,18 +128,28 @@ function handle(d) {
         } else if (d.hit === 2) {
           fx.confetti(d.x2 * U, d.y2 * U, 50); sfx.caught();
           const mine = snap && snap.me.role === 'hider' && d.vid === net.myId;
-          const msg = mine ? `<b>${d.seeker}</b> caught you!` : `<b>${d.seeker}</b> caught <b>${d.name}</b>!`;
+          const msg = mine ? `<b>${esc(d.seeker)}</b> caught you!` : `<b>${esc(d.seeker)}</b> caught <b>${esc(d.name)}</b>!`;
           thumb(d.skin | 0).then(url => hud.feed(`<img src="${url}">${msg}`, '#ffe9a6'));
         }
       } else if (d.kind === 'say') {
-        const e = ents.nearest(d.x * U, d.y * U);
-        if (e && e.pet) fx.bubble(e.pet.root, SOUND[ANIMALS[d.skin] && ANIMALS[d.skin].id] || 'Hi!');
-        sfx.animal(ANIMALS[d.skin] && ANIMALS[d.skin].id);
-      } else if (d.kind === 'listen') fx.ripple(d.x * U, d.y * U, '#bfe6ff', 6);
-      else if (d.kind === 'down') hud.feed(`<b>${d.name}</b> ran out of water!`, '#cfe7ff');
+        // seekers get hider calls without a position: sound only (plus the arrow)
+        const e = d.x != null && ents.nearest(d.x * U, d.y * U);
+        if (e && e.pet) fx.bubble(e.pet.root, SOUND[ANIMALS[d.skin] && ANIMALS[d.skin].id] || 'Hi!', e.tagEl ? 1.5 : 1.12); // above a name tag
+        sfx.animal(ANIMALS[d.skin] && ANIMALS[d.skin].id, d.loud ? .2 : .07); // hider calls are loud; herd chatter is soft
+      } else if (d.kind === 'listen' && d.by !== net.myId) fx.ripple(d.x * U, d.y * U, '#bfe6ff', 6);
+
+      else if (d.kind === 'down') hud.feed(`<b>${esc(d.name)}</b> ran out of water!`, '#cfe7ff');
       break;
     }
-    case 'sense': hud.feed(['All quiet around here.', 'Someone is <b>nearby</b>…', 'Someone is <b>very close</b>!'][d.level], '#cfe7ff'); break;
+    case 'heard': hud.feed('A hider called! <b>Follow the arrow</b>', '#ffe6a6'); break;
+    case 'sense': {
+      // my own Listen ripple: blue = nobody inside it, red = a hider is inside (two red waves = very close)
+      const p = ents.pos(myKey());
+      if (p) { const col = d.level ? '#ff4d5e' : '#bfe6ff'; fx.ripple(p.x, p.z, col, 6); if (d.level === 2) setTimeout(() => fx && fx.ripple(p.x, p.z, col, 3.5), 250); }
+      if (d.level) sfx.oops();
+      hud.feed(['All quiet around here.', 'Someone is <b>nearby</b>…', 'Someone is <b>very close</b>!'][d.level], d.level ? '#ffd0d4' : '#cfe7ff');
+      break;
+    }
     case 'round': {
       const lobby = app.lobby, players = lobby ? lobby.players : [];
       const myRole = snap ? snap.me.role : '';
@@ -146,17 +161,40 @@ function handle(d) {
 }
 
 async function showPodium(d) {
-  const { engine, app, net } = ctx;
+  const { engine, app, net } = ctx, my = buildId;
   L.classList.add('final');
-  podium = await ov.podium(d, app.lobby ? app.lobby.players : [], net.myId, engine, () => {});
+  const p = await ov.podium(d, app.lobby ? app.lobby.players : [], net.myId, engine, () => {});
+  if (my !== buildId || !L) { p.dispose(); return; } // the game ended while the podium was loading
+  podium = p;
   engine.setScene(podium.scene);
 }
 
 function act(id) {
   if (!snap || !snap.me.alive) return;
   const role = snap.me.role;
-  if (role === 'hider' && ['swap', 'say', 'sleep', 'decoy'].includes(id)) { ctx.net.game({ t: id === 'swap' ? 'skin' : id }); ctx.sfx.click(); }
+  if (role === 'hider' && (id === 'say' || id === 'decoy')) { ctx.net.game({ t: id }); ctx.sfx.click(); }
   if (role === 'seeker' && id === 'listen') { ctx.net.game({ t: 'listen' }); ctx.sfx.click(); }
+}
+
+// Seeker-only ground mark: an arrow toward the last hider call.
+function callArrow() {
+  // arrow drawn on top of everything (white outline + pink fill) so trees, houses and the seeker never hide it
+  const shape = k => { const s = new THREE.Shape(); s.moveTo(.62 * k, 0); s.lineTo(-.3 * k, .46 * k); s.lineTo(-.1 * k, 0); s.lineTo(-.3 * k, -.46 * k); s.closePath(); return s; };
+  const arrow = new THREE.Group(); arrow.position.y = .06; arrow.visible = false;
+  [[1.25, '#ffffff', 10], [1, '#ffb81f', 11]].forEach(([k, color, order]) => {
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape(k)), new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.renderOrder = order; m.position.x = k > 1 ? -.06 : 0; arrow.add(m);
+  });
+  return arrow;
+}
+function updateSeekerMarks(me, mine, t) {
+  const on = me.role === 'seeker' && me.alive && snap.ph === 'playing' && mine && mine.pet;
+  arrow.visible = !!(on && me.sn != null);
+  if (arrow.visible) {
+    const p = mine.pet.root.position;
+    const a = me.sn, bob = 1.5 + Math.sin(t * 8) * .12;
+    arrow.position.set(p.x + Math.cos(a) * bob, .06, p.z + Math.sin(a) * bob); arrow.rotation.y = -a;
+  }
 }
 
 function setAim(cx, cy) {
@@ -213,4 +251,5 @@ function frame(dt, t) {
   else world.covers.update(-99, -99);
   reticle.visible = seeker && me.alive && snap.ph === 'playing' && aimOk && !ctx.engine.isTouch;
   if (reticle.visible) reticle.position.set(aim.x, 0, aim.z);
+  updateSeekerMarks(me, mine, t);
 }

@@ -32,15 +32,17 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 ## Hide & Seek (2–12 players)
 - **Hiders** look exactly like the herd animals. Walk slowly, stay with the herd, hide behind trees and bushes.
   Running is fast but leaves footprints.
-  Tricks: **Swap** your animal, **Call** (−3 s on the clock), **Sleep** (a shot counts as a miss), **Decoy** (release a look-alike that runs off).
-- **Seeker** has a water gun. Squirting a real animal costs 15 water; empty tank = out. **Listen** tells you whether a hider is close.
+  Tricks: **Call** (−3 s on the clock, but every seeker gets an arrow toward where you called for 3 s), **Decoy** (release a look-alike that runs off).
+- **Seeker** has a water gun. Squirting a real animal costs 15 water; empty tank = out. **Listen** sends out a wave: it turns **red** if a hider is within
+  6.5 m (two red waves = very close), blue if nobody is. Only the seeker sees the colour.
 - **Frenzy** — the last 5 seconds: the seeker is faster, misses are free and you can hold to keep squirting.
 - Everyone takes a turn as the seeker; points add up over the rounds, then a podium.
 - 3 maps with their own animals: **Farm** (Piggy, Cow, Chick, Bunny, Puppy, Kitty), **Snow Village** (Penguin, Polar Bear, Fox, Deer, Beaver),
   **Beach** (Crab, Parrot, Monkey, Koala, Tiger).
-- Controls — desktop: WASD/arrows, Shift run, E swap, Q call, Z sleep, F decoy; seeker: mouse to aim, click to squirt, R listen.
+- Controls — desktop: WASD/arrows, Shift run, Q call, F decoy; seeker: mouse to aim, click to squirt, R listen.
   Phone: joystick on the left, buttons on the right; seekers tap the ground to squirt.
-- Quick test timings: `HS_HIDE_T=5 HS_ROUND_T=45 npm start`.
+- Settings: map, rounds, and round time (2 / 3 / 4 / 5 min).
+- Quick test timings: `HS_HIDE_T=5 HS_ROUND_T=45 npm start` (`HS_ROUND_T` overrides the Time setting).
 
 ## Blind Drive (2–8 players, teams)
 - Pick a team in the lobby (Red, Blue, Green, Yellow; 2–3 per team, leftovers are placed automatically).

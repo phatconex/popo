@@ -16,8 +16,8 @@ export class Overlays {
   roleCard(role, round, total, theme) {
     const c = this.$('.hs-card');
     const tips = role === 'hider'
-      ? (this.isTouch ? ['Stick: walk slowly like the herd', 'Hold Run to dash — it leaves footprints', 'Swap · Call · Sleep · Decoy to fool the seeker'] : ['WASD: walk slowly like the herd', 'Shift: run — it leaves footprints!', 'E swap · Q call · Z sleep · F decoy'])
-      : (this.isTouch ? ['Stick: move · Tap the ground to squirt water', 'Real animals cost you water', 'Listen tells you if a hider is close'] : ['WASD: move · Click to squirt water', 'Real animals cost you water', 'R: listen for hiders nearby']);
+      ? (this.isTouch ? ['Stick: walk slowly like the herd', 'Hold Run to dash — it leaves footprints', 'Call: −3 s on the clock, but the seeker sees where · Decoy: a look-alike runs off'] : ['WASD: walk slowly like the herd', 'Shift: run — it leaves footprints!', 'Q call: −3 s, but the seeker sees where · F decoy'])
+      : (this.isTouch ? ['Stick: move · Tap the ground to squirt water', 'Real animals cost you water', 'Listen: a red wave = a hider is near'] : ['WASD: move · Click to squirt water', 'Real animals cost you water', 'R listen: a red wave = a hider is near']);
     c.innerHTML = `<div class="rnd">ROUND ${round} / ${total} · ${(MAP_NAME[theme] || '').toUpperCase()}</div><div class="you">You are ${role === 'hider' ? 'a' : 'the'}</div>
       <div class="role" style="color:${role === 'hider' ? '#55d36b' : '#ff5d6c'}">${role === 'hider' ? 'HIDER' : 'SEEKER'}</div><ul>${tips.map(t => `<li>${t}</li>`).join('')}</ul>`;
     c.classList.add('on');
@@ -64,9 +64,9 @@ export class Overlays {
     let left = Math.round(d.wait);
     const tick = () => { el.querySelector('.next').textContent = d.last ? `Final results in ${Math.max(0, left - 6)}s…` : `Next round in ${left}s…`; left--; };
     tick(); this.resT = setInterval(tick, 1000);
-    if (d.last) setTimeout(() => { this.closeRound(); onNext && onNext(); }, 3500);
+    if (d.last) this.finalT = setTimeout(() => { this.closeRound(); onNext && onNext(); }, 3500);
   }
-  closeRound() { clearInterval(this.resT); if (this.resEl) this.resEl.remove(); this.resEl = null; }
+  closeRound() { clearInterval(this.resT); clearTimeout(this.finalT); if (this.resEl) this.resEl.remove(); this.resEl = null; }
 
   // Final podium in its own little scene. Returns { scene, tick(dt,t), dispose() }.
   async podium(d, players, myId, engine, onBack) {

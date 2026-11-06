@@ -105,6 +105,7 @@ export async function pet(code, height = .9) {
 }
 
 // Many copies of one model as InstancedMeshes (one draw per mesh part). list: [{x, z, ry, s, y}]
+// opts.center: shift the model so the middle of its footprint sits on (x, z) — for models whose origin is off to one side (fences).
 export async function instanced(path, height, list, opts = {}) {
   const group = new THREE.Group();
   if (!list.length) return group;
@@ -112,6 +113,8 @@ export async function instanced(path, height, list, opts = {}) {
   const base = height / heights.get(path);
   g.scene.updateMatrixWorld(true);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const shift = new THREE.Matrix4();
+  if (opts.center) { const c = new THREE.Box3().setFromObject(g.scene).getCenter(new THREE.Vector3()); shift.makeTranslation(-c.x, 0, -c.z); }
   g.scene.traverse(mesh => {
     if (!mesh.isMesh) return;
     const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, list.length);
@@ -121,7 +124,7 @@ export async function instanced(path, height, list, opts = {}) {
       q.setFromAxisAngle(up, it.ry || 0);
       v.set(it.x, it.y || 0, it.z);
       sc.setScalar(base * (it.s || 1));
-      m4.compose(v, q, sc).multiply(mesh.matrixWorld);
+      m4.compose(v, q, sc).multiply(shift).multiply(mesh.matrixWorld);
       im.setMatrixAt(i, m4);
     });
     im.instanceMatrix.needsUpdate = true;

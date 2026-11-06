@@ -48,10 +48,10 @@ const VOICE = {
   parrot: ['sawtooth', 1100, 1500, .12, 2, .06], monkey: ['triangle', 600, 1100, .12, 3, .06], koala: ['sine', 260, 200, .4, 1, 0],
   tiger: ['sawtooth', 160, 110, .35, 1, 0],
 };
-sfx.animal = id => {
+sfx.animal = (id, vol = .07) => {
   const v = VOICE[id]; if (!v) return sfx.pop();
   const [type, a, b, dur, n, gap] = v;
-  for (let i = 0; i < n; i++) setTimeout(() => beep(a, dur, type, .07, b - a), i * (dur + gap) * 1000);
+  for (let i = 0; i < n; i++) setTimeout(() => beep(a, dur, type, vol, b - a), i * (dur + gap) * 1000);
 };
 
 export const vibrate = p => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };

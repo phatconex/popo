@@ -239,9 +239,10 @@ export async function buildWorld(map, quality) {
   }
   // fence around the map (beach: no fence on the sea side) + trees outside it
   const fl = [], step = 1.15, seaTop = map.seas.length ? map.seas[0].y * U : null;
-  for (let x = 0; x <= W; x += step) { fl.push({ x, z: -.3, ry: 0 }); if (seaTop == null) fl.push({ x, z: H + .3, ry: 0 }); }
-  for (let z = 0; z <= (seaTop ?? H); z += step) { fl.push({ x: -.3, z, ry: Math.PI / 2 }); fl.push({ x: W + .3, z, ry: Math.PI / 2 }); }
-  jobs.push(instanced(T.fence[0], T.fence[1], fl).then(g => scene.add(g)));
+  // fences are centred on the map edge (the server lets animals walk to 0.35 m from it)
+  for (let x = step / 2; x <= W; x += step) { fl.push({ x, z: -.1, ry: 0 }); if (seaTop == null) fl.push({ x, z: H + .1, ry: 0 }); }
+  for (let z = step / 2; z <= (seaTop ?? H); z += step) { fl.push({ x: -.1, z, ry: Math.PI / 2 }); fl.push({ x: W + .1, z, ry: Math.PI / 2 }); }
+  jobs.push(instanced(T.fence[0], T.fence[1], fl, { center: true }).then(g => scene.add(g)));
   const out = [];
   for (let i = 0; i < 160; i++) {
     const side = i % 4, t = r();

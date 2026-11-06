@@ -3,7 +3,8 @@ const assert = require('node:assert');
 const { genMap, blocked, THEME_IDS } = require('../server/games/hideseek/maps');
 
 const SIZE = { farm: [4800, 3300], snow: [4500, 3300], beach: [5100, 3000] };
-const MIN_TREES = { farm: 60, snow: 75, beach: 46 }; // reduced after playtest: map felt crowded
+const MIN_TREES = { farm: 40, snow: 48, beach: 30 }; // reduced twice after playtests: map felt crowded
+const MAX_TREES = { farm: 44, snow: 54, beach: 34 };
 const KINDS = { farm: [0, 3, 4, 1, 6, 5], snow: [7, 8, 2, 18, 20], beach: [11, 12, 13, 10, 15] };
 
 // chỉ xét nhà/biển/ao (không tính cây, đồ vật) để biết một điểm có nằm trong nước hay nhà không
@@ -14,7 +15,7 @@ for (const theme of THEME_IDS) {
     const m = genMap(theme);
     assert.deepStrictEqual([m.W, m.H], SIZE[theme]);
     assert.deepStrictEqual(m.kinds, KINDS[theme]);
-    assert.ok(m.trees.length >= MIN_TREES[theme], `trees ${m.trees.length}`);
+    assert.ok(m.trees.length >= MIN_TREES[theme] && m.trees.length <= MAX_TREES[theme], `trees ${m.trees.length}`);
     assert.ok(m.landmarks.length >= 6, `landmarks ${m.landmarks.length}`);
   });
 

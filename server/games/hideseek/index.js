@@ -3,7 +3,8 @@ const { genMap, blocked, THEME_IDS } = require('./maps');
 
 // ---- Luật chơi (chỉnh ở đây cho cân bằng) ----
 const HIDE_T = +process.env.HS_HIDE_T || 15;   // giây cho người trốn đi ẩn
-const ROUND_T = +process.env.HS_ROUND_T || 180; // giây mỗi ván (HS_ROUND_T để test nhanh)
+const ENV_ROUND_T = +process.env.HS_ROUND_T || 0; // ép thời gian mỗi ván (để test nhanh); không có thì lấy từ cài đặt Time
+const ROUND_T = 180;        // mặc định nếu cài đặt Time không hợp lệ
 const NPC_SPD = 55;         // tốc độ thú đi dạo
 const WALK = 55;            // người trốn đi bộ = y hệt thú
 const RUN = 160;            // chạy nhanh: để lại dấu chân!
@@ -15,11 +16,14 @@ const GRID = 120;
 const SHOT_CD = 0.6;
 const NPC_PENALTY = 15;     // bắn nhầm thú mất máu
 const CATCH_BONUS = 20;     // bắt được người hồi máu
-const SAY_CD = 8, SAY_BONUS = 3;          // Kêu: trừ 3s đồng hồ
-const SLEEP_T = 5, SLEEP_CD = 25;         // Giả ngủ: bắn trúng cũng như bắn nhầm thú
-const DECOY_CD = 20, DECOY_RUN = 3;     // Phân thân: thả 1 con thú giả chạy đi, không giới hạn, hồi 20s
+const SAY_CD = 8, SAY_BONUS = 3;          // Kêu: trừ 3s đồng hồ, nhưng người tìm thấy mũi tên chỉ về chỗ vừa kêu
+const HEARD_T = 3;                        // mũi tên hiện 3 s
+const EDGE = 35;                          // cách hàng rào (đơn vị bản đồ): thú đi sát được tới rào
+const DECOY_CD = 20, DECOY_RUN = 3, DECOY_R = 350;     // Phân thân: một con thú gần đó (trong 3,5 m) bỏ chạy để lại dấu chân, hồi 20s
 const FRENZY_T = 5, FRENZY_CD = 0.15, FRENZY_SPD = 1.6; // Giờ G: 5s cuối người tìm bắn liên tục, không mất máu, chạy nhanh
 const LISTEN_CD = 25;                     // Nghe ngóng (người tìm): biết người trốn gần hay xa
+const LISTEN_NEAR = 650, LISTEN_CLOSE = 260; // Nghe ngóng: vòng sóng chuyển đỏ nếu có người trốn trong 6,5 m (rất gần: 2,6 m)
+const NPC_AREA = 360000, NPC_PER_PLAYER = 3; // số thú = diện tích / NPC_AREA + 3 mỗi người
 const FOOTPRINT_LIFE = 5;
 const ROUND_PAUSE = 7, FINAL_PAUSE = 10;
 // Điểm: người tìm +100 mỗi lần bắt cộng số giây còn lại (bắt càng sớm càng nhiều), +50 nếu bắt hết;
@@ -34,6 +38,7 @@ const meta = {
   settings: [
     { key: 'map', label: 'Map', def: 'random', options: [{ v: 'random', label: 'Random' }, { v: 'farm', label: 'Farm' }, { v: 'snow', label: 'Snow Village' }, { v: 'beach', label: 'Beach' }] },
     { key: 'rounds', label: 'Rounds', def: 'auto', options: [{ v: 'auto', label: 'Everyone seeks once' }, { v: '2', label: '2' }, { v: '4', label: '4' }, { v: '6', label: '6' }] },
+    { key: 'time', label: 'Time', def: '180', options: [{ v: '120', label: '2 min' }, { v: '180', label: '3 min' }, { v: '240', label: '4 min' }, { v: '300', label: '5 min' }] },
   ],
 };
 
@@ -44,14 +49,23 @@ const ceil0 = v => Math.max(0, Math.ceil(v));
 const pick = a => a[Math.random() * a.length | 0];
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
+// A step is allowed if it lands in a free spot — or, when the body already stands inside an obstacle's
+// walking pad (pushed there by the herd), if it at least stays out of the obstacle itself, so nobody gets stuck.
+function canStep(m, x, y, nx, ny) {
+  return !blocked(m, nx, ny) || (blocked(m, x, y) && !blocked(m, nx, ny, 0));
+}
+
+const seekersFor = n => Math.max(1, Math.round(n / 4));
+
 function spot(m, avoid) {
   let x, y;
-  do { x = rnd(80, m.W - 80); y = rnd(110, m.H - 60); } while (blocked(m, x, y, 20) || (avoid && Math.hypot(x - avoid.x, y - avoid.y) < 700));
+  do { x = rnd(EDGE + 20, m.W - EDGE - 20); y = rnd(EDGE + 20, m.H - EDGE - 20); } while (blocked(m, x, y, 20) || (avoid && Math.hypot(x - avoid.x, y - avoid.y) < 700));
   return { x, y };
 }
 function pickTarget(m, a) {
   for (let i = 0; i < 8; i++) {
-    const tx = clamp(a.x + rnd(-280, 280), 60, m.W - 60), ty = clamp(a.y + rnd(-280, 280), 90, m.H - 40);
+    // herd animals roam all the way to the fence too, so a body there is not a giveaway
+    const tx = clamp(a.x + rnd(-280, 280), EDGE, m.W - EDGE), ty = clamp(a.y + rnd(-280, 280), EDGE, m.H - EDGE);
     if (!blocked(m, tx, ty)) { a.tx = tx; a.ty = ty; return; }
   }
   a.tx = a.x; a.ty = a.y;
@@ -64,8 +78,8 @@ function separate(bodies, m) {
   for (const o of bodies) { const k = key(Math.floor(o.x / GRID), Math.floor(o.y / GRID)); let c = cells.get(k); if (!c) cells.set(k, c = []); c.push(o); }
   const min = BODY_R * 2;
   const tryMove = (o, nx, ny) => {
-    nx = clamp(nx, 60, m.W - 60); ny = clamp(ny, 90, m.H - 40);
-    if (!blocked(m, nx, ny, 0)) { o.x = nx; o.y = ny; }
+    nx = clamp(nx, EDGE, m.W - EDGE); ny = clamp(ny, EDGE, m.H - EDGE);
+    if (canStep(m, o.x, o.y, nx, ny)) { o.x = nx; o.y = ny; }
   };
   for (const a of bodies) {
     const cx = Math.floor(a.x / GRID), cy = Math.floor(a.y / GRID);
@@ -114,7 +128,8 @@ class HideSeek {
     const players = this.api.players();
     for (const p of players) this.ps.set(p.id, { id: p.id, name: p.name, av: p.av | 0, score: 0, seeks: 0, input: {} });
     const s = this.api.settings.rounds;
-    this.total = s === 'auto' ? clamp(players.length, 2, 6) : +s;
+    // auto: enough rounds for everyone to seek once (several seekers per round with many players)
+    this.total = s === 'auto' ? clamp(Math.ceil(players.length / seekersFor(players.length)), 2, 6) : +s;
     this.newRound();
   }
 
@@ -126,8 +141,8 @@ class HideSeek {
     const m = this.map = genMap(theme);
     // xoay vòng: ai làm người tìm ít nhất thì tới lượt
     const gs = shuffle([...this.ps.values()]).sort((a, b) => a.seeks - b.seeks);
-    const nSeek = Math.max(1, Math.round(gs.length / 4));
-    const nNpc = Math.round(m.W * m.H / 220000) + gs.length * 4;
+    const nSeek = seekersFor(gs.length);
+    const nNpc = Math.round(m.W * m.H / NPC_AREA) + gs.length * NPC_PER_PLAYER;
     const eids = shuffle([...Array(nNpc + gs.length).keys()].map(i => i + 1));
     this.nextEid = nNpc + gs.length + 1;
     this.npcs = [];
@@ -140,7 +155,7 @@ class HideSeek {
     gs.forEach((g, i) => {
       Object.assign(g, {
         role: i < nSeek ? 'seeker' : 'hider', alive: true, hp: 100, input: {}, ang: 0, flip: 0, dx: 0, dy: 0, moving: false,
-        cool: 0, sayCd: 0, sleepCd: 0, sleep: 0, decoyCd: 0, listenCd: 0, surv: 0, catchPts: 0, pts: 0,
+        cool: 0, sayCd: 0, decoyCd: 0, listenCd: 0, heard: 0, hx: 0, hy: 0, surv: 0, catchPts: 0, pts: 0,
       });
       if (g.role === 'seeker') { g.seeks++; g.x = m.spawn.x + (i - (nSeek - 1) / 2) * 50; g.y = m.spawn.y; }
       else { Object.assign(g, spot(m, m.spawn)); g.skin = pick(m.kinds); g.eid = eids.pop(); }
@@ -162,7 +177,7 @@ class HideSeek {
   onDisconnect(p) { const g = this.ps.get(p.id); if (g) g.input = {}; }
   onLeave(p) {
     this.ps.delete(p.id);
-    if (this.ps.size < 2) return this.api.end([]);
+    if (this.ps.size < 2) return this.phase === 'roundEnd' && this.round >= this.total ? this.finish() : this.api.end([]);
     this.checkWin();
   }
 
@@ -177,34 +192,38 @@ class HideSeek {
         if (typeof d.ang === 'number' && isFinite(d.ang)) g.ang = d.ang;
         break;
       case 'shoot': if (live) this.shoot(g, +d.x, +d.y); break;
-      case 'skin':
-        if (live && g.role === 'hider') { const ks = this.map.kinds; g.skin = ks[(ks.indexOf(g.skin) + 1) % ks.length]; }
-        break;
       case 'say':
         if (live && playing && g.role === 'hider' && g.sayCd <= 0) {
           g.sayCd = SAY_CD;
-          this.time -= SAY_BONUS;
-          this.api.bcast({ t: 'fx', kind: 'say', x: g.x | 0, y: g.y | 0, skin: g.skin });
+          if (this.time > FRENZY_T) this.time = Math.max(FRENZY_T, this.time - SAY_BONUS); // never skips Frenzy
+          // hiders see the speech bubble on the caller; seekers only hear it and get the arrow (no exact animal)
+          for (const p of this.api.players()) {
+            const s = this.ps.get(p.id);
+            if (!s) continue;
+            if (s.role !== 'seeker') { this.api.send(p, { t: 'fx', kind: 'say', x: g.x | 0, y: g.y | 0, skin: g.skin, loud: 1 }); continue; }
+            this.api.send(p, { t: 'fx', kind: 'say', skin: g.skin, loud: 1 });
+            if (s.alive) { Object.assign(s, { heard: HEARD_T, hx: g.x, hy: g.y }); this.api.send(p, { t: 'heard' }); }
+          }
         }
-        break;
-      case 'sleep':
-        if (live && g.role === 'hider' && g.sleepCd <= 0 && g.sleep <= 0) { g.sleep = SLEEP_T; g.sleepCd = SLEEP_CD; g.moving = false; }
         break;
       case 'decoy':
         if (live && g.role === 'hider' && g.decoyCd <= 0) {
           g.decoyCd = DECOY_CD;
           let dx = g.dx, dy = g.dy;
           if (!dx && !dy) { const a = Math.random() * Math.PI * 2; dx = Math.cos(a); dy = Math.sin(a); }
-          this.npcs.push({ eid: this.nextEid++, x: g.x, y: g.y, tx: g.x, ty: g.y, skin: g.skin, flip: g.flip, stun: 0, sleep: 0, wait: 0, run: DECOY_RUN, dx, dy });
+          // a nearby herd animal bolts off (nothing appears out of thin air next to the hider)
+          let near = null, nd = DECOY_R;
+          for (const a of this.npcs) { const d = Math.hypot(a.x - g.x, a.y - g.y); if (d < nd && a.stun <= 0 && !(a.run > 0)) { nd = d; near = a; } }
+          if (near) Object.assign(near, { sleep: 0, wait: 0, run: DECOY_RUN, dx, dy });
+          else this.npcs.push({ eid: this.nextEid++, x: g.x, y: g.y, tx: g.x, ty: g.y, skin: g.skin, flip: g.flip, stun: 0, sleep: 0, wait: 0, run: DECOY_RUN, dx, dy });
         }
         break;
       case 'listen':
         if (live && playing && g.role === 'seeker' && g.listenCd <= 0) {
           g.listenCd = LISTEN_CD;
-          let best = Infinity;
-          for (const h of this.ps.values()) if (h.role === 'hider' && h.alive) best = Math.min(best, Math.hypot(h.x - g.x, h.y - g.y));
-          this.api.send(p, { t: 'sense', level: best < 260 ? 2 : best < 650 ? 1 : 0 });
-          this.api.bcast({ t: 'fx', kind: 'listen', x: g.x | 0, y: g.y | 0 });
+          const best = this.nearestHider(g);
+          this.api.send(p, { t: 'sense', level: best < LISTEN_CLOSE ? 2 : best < LISTEN_NEAR ? 1 : 0 });
+          this.api.bcast({ t: 'fx', kind: 'listen', x: g.x | 0, y: g.y | 0, by: g.id }); // others see a plain ripple; the seeker's own comes with the result
         }
         break;
     }
@@ -221,8 +240,8 @@ class HideSeek {
     const fx = { t: 'fx', kind: 'shot', x1: sx | 0, y1: sy | 0, x2: (sx + (tx - sx) / d * len) | 0, y2: (sy + (ty - sy) / d * len) | 0, hit: 0, by: g.id };
     if (best) {
       fx.x2 = best.o.x | 0; fx.y2 = best.o.y | 0;
-      if (best.npc || best.o.sleep > 0) {          // người đang giả ngủ: bị tính như bắn nhầm thú
-        if (best.npc) { best.o.stun = 1.4; best.o.sleep = 0; best.o.run = 0; }
+      if (best.npc) {
+        best.o.stun = 1.4; best.o.sleep = 0; best.o.run = 0;
         if (frenzy) fx.free = 1; else g.hp -= NPC_PENALTY;
         fx.hit = 1;
         if (g.hp <= 0) { g.hp = 0; g.alive = false; }
@@ -236,6 +255,19 @@ class HideSeek {
     this.api.bcast(fx);
     if (!g.alive) this.api.bcast({ t: 'fx', kind: 'down', name: g.name });
     this.checkWin();
+  }
+
+  roundT() {
+    if (ENV_ROUND_T) return ENV_ROUND_T;
+    const v = +this.api.settings.time;
+    return meta.settings[2].options.some(o => +o.v === v) ? v : ROUND_T;
+  }
+
+  // Distance from g to the nearest living hider (Infinity if none).
+  nearestHider(g) {
+    let best = Infinity;
+    for (const h of this.ps.values()) if (h.role === 'hider' && h.alive) best = Math.min(best, Math.hypot(h.x - g.x, h.y - g.y));
+    return best;
   }
 
   frenzy() { return this.phase === 'playing' && this.time <= FRENZY_T; }
@@ -263,7 +295,7 @@ class HideSeek {
       if (a.run > 0) { // mồi nhử đang chạy
         a.run -= dt;
         const nx = a.x + a.dx * RUN * dt, ny = a.y + a.dy * RUN * dt;
-        if (blocked(m, nx, ny) || nx < 60 || nx > m.W - 60 || ny < 90 || ny > m.H - 40) {
+        if (!canStep(m, a.x, a.y, nx, ny) || nx < EDGE || nx > m.W - EDGE || ny < EDGE || ny > m.H - EDGE) {
           const ang = Math.atan2(-a.dy, -a.dx) + rnd(-.8, .8);
           a.dx = Math.cos(ang); a.dy = Math.sin(ang);
         } else { a.x = nx; a.y = ny; if (Math.abs(a.dx) > .1) a.flip = a.dx > 0 ? 1 : 0; this.footprint(a, a.dx, a.dy, dt); }
@@ -279,15 +311,14 @@ class HideSeek {
         continue;
       }
       const s = Math.min(d, NPC_SPD * dt), nx = a.x + dx / d * s, ny = a.y + dy / d * s;
-      if (blocked(m, nx, ny)) { pickTarget(m, a); continue; }
+      if (!canStep(m, a.x, a.y, nx, ny)) { pickTarget(m, a); continue; }
       a.x = nx; a.y = ny;
       if (Math.abs(dx) > 1) a.flip = dx > 0 ? 1 : 0;
     }
     for (const g of this.ps.values()) {
       if (!g.alive) continue;
-      for (const k of ['cool', 'sayCd', 'sleepCd', 'decoyCd', 'listenCd']) if (g[k] > 0) g[k] -= dt;
+      for (const k of ['cool', 'sayCd', 'decoyCd', 'listenCd', 'heard']) if (g[k] > 0) g[k] -= dt;
       if (g.role === 'hider' && playing) g.surv += dt;
-      if (g.sleep > 0) { g.sleep -= dt; g.moving = false; continue; }
       if (g.role === 'seeker' && !playing) continue;
       let mx = g.input.mx || 0, my = g.input.my || 0;
       const l = Math.hypot(mx, my);
@@ -295,9 +326,9 @@ class HideSeek {
       if (l > 1) { mx /= l; my /= l; }
       const running = g.role === 'hider' && g.input.run;
       const sp = g.role === 'seeker' ? SEEK_SPD * (this.frenzy() ? FRENZY_SPD : 1) : running ? RUN : WALK;
-      const nx = clamp(g.x + mx * sp * dt, 60, m.W - 60), ny = clamp(g.y + my * sp * dt, 90, m.H - 40);
-      if (!blocked(m, nx, g.y)) g.x = nx;
-      if (!blocked(m, g.x, ny)) g.y = ny;
+      const nx = clamp(g.x + mx * sp * dt, EDGE, m.W - EDGE), ny = clamp(g.y + my * sp * dt, EDGE, m.H - EDGE);
+      if (canStep(m, g.x, g.y, nx, g.y)) g.x = nx;
+      if (canStep(m, g.x, g.y, g.x, ny)) g.y = ny;
       if (Math.abs(mx) > .1) g.flip = mx > 0 ? 1 : 0;
       g.moving = true; g.dx = mx; g.dy = my;
       if (running) this.footprint(g, mx, my, dt);
@@ -305,7 +336,7 @@ class HideSeek {
     const bodies = [...this.npcs, ...[...this.ps.values()].filter(g => g.alive && !(g.role === 'seeker' && !playing))];
     separate(bodies, m);
     this.fp = this.fp.filter(f => this.clock - f.t < FOOTPRINT_LIFE);
-    if (this.phase === 'hiding' && this.time <= 0) { this.phase = 'playing'; this.time = ROUND_T; this.fp = []; }
+    if (this.phase === 'hiding' && this.time <= 0) { this.phase = 'playing'; this.time = this.roundT(); this.fp = []; }
     this.checkWin();
     if (this.phase === 'roundEnd') return;
     this.broadcast();
@@ -314,7 +345,7 @@ class HideSeek {
   broadcast() {
     const all = [...this.ps.values()];
     const hiders = all.filter(g => g.role === 'hider' && g.alive);
-    const fl = o => (o.stun > 0 ? 1 : 0) | (o.sleep > 0 ? 2 : 0);
+    const fl = o => (o.stun > 0 ? 1 : 0); // napping herd animals look idle: hiders can't nap, so a Zzz would give them away
     // sắp theo y để vừa vẽ đúng lớp, vừa không lộ ai là người qua thứ tự
     const e = [
       ...this.npcs.map(a => [a.eid, a.x | 0, a.y | 0, a.skin, a.flip, fl(a)]),
@@ -331,10 +362,13 @@ class HideSeek {
       const msg = {
         ...base,
         me: {
-          role: g.role, alive: g.alive, hp: g.hp, eid: g.eid, skin: g.skin, sleep: g.sleep > 0 ? 1 : 0,
-          cd: { say: ceil0(g.sayCd), sleep: ceil0(g.sleepCd), decoy: ceil0(g.decoyCd), listen: ceil0(g.listenCd) },
+          role: g.role, alive: g.alive, hp: g.hp, eid: g.eid, skin: g.skin,
+          cd: { say: ceil0(g.sayCd), decoy: ceil0(g.decoyCd), listen: ceil0(g.listenCd) },
         },
       };
+      if (g.role === 'seeker' && g.alive && this.phase === 'playing') {
+        if (g.heard > 0) msg.me.sn = +Math.atan2(g.hy - g.y, g.hx - g.x).toFixed(2); // arrow toward the last call
+      }
       if (g.role === 'hider' || !g.alive) msg.mates = mates; // người tìm còn sống KHÔNG biết ai là ai
       this.api.send(p, msg);
     }
@@ -374,4 +408,4 @@ class HideSeek {
   }
 }
 
-module.exports = { meta, create: api => new HideSeek(api), _test: { separate, rayHit, BODY_R, HIT_R, RANGE } };
+module.exports = { meta, create: api => new HideSeek(api), _test: { separate, rayHit, BODY_R, HIT_R, RANGE, NPC_AREA, NPC_PER_PLAYER, LISTEN_NEAR, LISTEN_CLOSE, HEARD_T, EDGE } };

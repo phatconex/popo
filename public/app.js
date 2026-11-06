@@ -12,6 +12,7 @@ import * as BlindDrive from './games/blinddrive3d/client.js';
 const GAMES = { hideseek: HideSeek, blinddrive: BlindDrive };
 let screen = null, screenName = '', game = null, gameId = null, routing = Promise.resolve();
 let gameQueue = null; // game messages that arrive while the game is still being mounted
+let retiring = false; // the finished game is waiting to be unmounted: new game messages must not reach it
 
 const app = {
   lobby: null,
@@ -44,7 +45,8 @@ async function mountGame(id) {
   for (const d of q) game.onMsg(d);
   app.loaded();
 }
-function unmountGame() { gameQueue = null; if (game) { game.unmount(); game = null; gameId = null; } }
+// keepQueue: a queue started for the next game while this one was retiring belongs to that game
+function unmountGame(keepQueue) { if (!keepQueue) gameQueue = null; if (game) { game.unmount(); game = null; gameId = null; } }
 
 function fatal() {
   ui.modal({ title: 'Oops', body: "Couldn't load the game files. Check your connection and reload.", actions: [{ label: 'Reload', cls: 'sun', onClick: () => location.reload() }], onClose: false });
@@ -53,10 +55,11 @@ function fatal() {
 net.on('lobby', m => {
   app.lobby = m;
   if (m.state === 'playing' && GAMES[m.game]) {
-    if (!game && !gameQueue) gameQueue = [];
+    if ((!game || retiring) && !gameQueue) gameQueue = [];
     routing = routing.then(() => mountGame(m.game)).then(() => game && game.onLobby && game.onLobby(m)).catch(e => { console.error(e); fatal(); });
   } else {
-    routing = routing.then(async () => { if (game) { await ui.cover(); unmountGame(); } });
+    if (game) retiring = true;
+    routing = routing.then(async () => { if (game) { await ui.cover(); unmountGame(true); } retiring = false; });
     show('lobby', Lobby);
   }
 });
@@ -73,6 +76,9 @@ net.on('disconnected', d => { if (screen && screen.onDisconnected) screen.onDisc
 engine.onFrame(() => ui.updateTags(engine.camera));
 
 // Start: rejoin the room this tab was in, otherwise the Open screen.
+// An invite link to a different room wins over the old seat (it frees itself after 30 s).
+const invite = (new URLSearchParams(location.search).get('room') || '').toUpperCase();
+if (net.session && /^[A-Z]{4}$/.test(invite) && invite !== net.session.code) net.leave();
 if (net.session) { net.resume(); setTimeout(() => { if (!app.lobby && !screen) show('open', Open); }, 8000); }
 else { net.connect(); show('open', Open); }
 window.__popo = { app, net, engine }; // handy for debugging in the console

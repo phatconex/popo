@@ -20,7 +20,7 @@
 .hs-act .cd{position:absolute;inset:0;border-radius:22px;background:rgba(20,30,50,.55);display:none;align-items:center;justify-content:center;font-size:26px}
 .hs-act.cool .cd{display:flex}
 .hs-act.held,.hs-act:active{transform:translateY(4px)}
-.a-run{background:#ff8a4c}.a-swap{background:#4fb4ff}.a-say{background:#ffb81f}.a-sleep{background:#9a7cff}.a-decoy{background:#55d36b}.a-listen{background:#4fb4ff}
+.a-run{background:#ff8a4c}.a-say{background:#ffb81f}.a-decoy{background:#55d36b}.a-listen{background:#4fb4ff}
 .hs-feed{position:absolute;left:50%;top:86px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none!important}
 .hs-feed div{font-size:17px;padding:4px 14px 6px;animation:tin .3s ease-out;white-space:nowrap}
 .hs-frenzy{position:absolute;inset:0;pointer-events:none!important;box-shadow:inset 0 0 0 10px #ff4d5e,inset 0 0 90px rgba(255,60,80,.6);opacity:0;transition:opacity .3s}
