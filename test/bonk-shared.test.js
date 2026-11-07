@@ -150,3 +150,21 @@ test('knockOf bonk scales as base + perCharge * c', () => {
   const k0 = BK.knockOf('bonk', 0);
   assert.ok(k0.power === 4.5 && k0.vy === 2 && k0.stun === 0.35);
 });
+
+test('hitObstacles pushes out of the circle and kills inward speed', () => {
+  const m = BK.OBST_R + BK.BODY_R;
+  assert.strictEqual(BK.OBST_R, 0.38);
+  const b = BK.newBody(1, 0, 0);
+  b.x = m - 0.1; b.vx = -3; b.vz = 1; // inside the circle at (0,0), moving in
+  BK.hitObstacles(b, [[0, 0]]);
+  assert.ok(Math.abs(b.x - m) < 1e-9 && b.z === 0);
+  assert.ok(Math.abs(b.vx - 1.5) < 1e-9, 'inward -3 becomes +1.5 (1.5x removed)');
+  assert.strictEqual(b.vz, 1);
+  const c = BK.newBody(0, 0, 0); c.x = m - 0.1; c.vx = 2; // moving outward: speed kept
+  BK.hitObstacles(c, [[0, 0]]);
+  assert.strictEqual(c.vx, 2);
+  const far = BK.newBody(5, 5, 0); far.vx = -1;
+  BK.hitObstacles(far, [[0, 0]]);
+  assert.deepStrictEqual([far.x, far.z, far.vx], [5, 5, -1]);
+  BK.hitObstacles(b, []); // no centres: no-op
+});

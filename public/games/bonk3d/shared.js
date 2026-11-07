@@ -10,7 +10,7 @@
   const DASH = { t: .2, v: 10 };
   const BUMP = { min: 4.5, share: .45, stun: .2, vy: 1.2 };
   const NUT = { h: 9, g: 14, r: 1.4, power: 4.8, vy: 3, stun: .5, aim: 7 };
-  const KO_WINDOW = 4;
+  const KO_WINDOW = 4, OBST_R = .38;
   const REACH = { push: 1.25, bonk: 1.45, dash: .8 };
 
   const SQ3 = Math.sqrt(3);
@@ -128,6 +128,19 @@
     }
   }
 
+  // Push b out of each obstacle circle (centres: [[x, z], ...]); moving inward loses 1.5x the inward normal speed.
+  function hitObstacles(b, centres) {
+    const m = OBST_R + BODY_R;
+    for (const [cx, cz] of centres) {
+      const dx = b.x - cx, dz = b.z - cz, d = Math.hypot(dx, dz);
+      if (d >= m || d === 0) continue;
+      const nx = dx / d, nz = dz / d;
+      b.x = cx + nx * m; b.z = cz + nz * m;
+      const vn = b.vx * nx + b.vz * nz;
+      if (vn < 0) { b.vx -= 1.5 * vn * nx; b.vz -= 1.5 * vn * nz; }
+    }
+  }
+
   // buf rows: [t, x, z, y, f, fl, ch], sorted by t. Returns [x, z, y, f, fl, ch] or null.
   function interp(buf, t) {
     if (!buf.length) return null;
@@ -141,9 +154,9 @@
   }
 
   const BK = {
-    S, WATER_Y, FALL_Y, GRAV, BODY_R, STEP, TURN, FR_AIR, CHARGE_T, CHARGE_SPEED, SURF, CD, PUSH, BONK, DASH, BUMP, NUT, KO_WINDOW, REACH,
+    S, WATER_Y, FALL_Y, GRAV, BODY_R, STEP, TURN, FR_AIR, CHARGE_T, CHARGE_SPEED, SURF, CD, PUSH, BONK, DASH, BUMP, NUT, KO_WINDOW, OBST_R, REACH,
     hexToXZ, xzToHex, ring, islandRadius, tileState, newBody, step, startBonk, releaseBonk, startPush, startDash,
-    pushTargets, bonkTouch, hitDir, knockOf, applyKnock, separate, interp,
+    pushTargets, bonkTouch, hitDir, knockOf, applyKnock, separate, hitObstacles, interp,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = BK;
   else root.BK = BK;
