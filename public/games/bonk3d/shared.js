@@ -110,7 +110,7 @@
   }
   function knockOf(kind, x) {
     if (kind === 'push') return { power: PUSH.power, vy: PUSH.vy, stun: PUSH.stun };
-    if (kind === 'bonk') return { power: BONK.power[0] + BONK.power[1] * x, vy: BONK.vy[0] + BONK.vy[1] * x, stun: BONK.stun[0] + (BONK.stun[1] - BONK.stun[0]) * x };
+    if (kind === 'bonk') return { power: BONK.power[0] + BONK.power[1] * x, vy: BONK.vy[0] + BONK.vy[1] * x, stun: BONK.stun[0] + BONK.stun[1] * x };
     if (kind === 'nut') return { power: NUT.power, vy: NUT.vy, stun: NUT.stun };
     if (kind === 'bump') return { power: BUMP.share * x, vy: BUMP.vy, stun: BUMP.stun };
     throw new Error('unknown knock kind: ' + kind);

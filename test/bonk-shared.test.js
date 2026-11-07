@@ -143,3 +143,10 @@ test('tileState', () => {
   assert.strictEqual(BK.tileState(brk, 7.9), 'warn');
   assert.strictEqual(BK.tileState(brk, 8), 'drop');
 });
+
+test('knockOf bonk scales as base + perCharge * c', () => {
+  const k = BK.knockOf('bonk', 1);
+  assert.ok(Math.abs(k.power - 10) < 1e-9 && Math.abs(k.vy - 4.5) < 1e-9 && Math.abs(k.stun - 0.85) < 1e-9);
+  const k0 = BK.knockOf('bonk', 0);
+  assert.ok(k0.power === 4.5 && k0.vy === 2 && k0.stun === 0.35);
+});
