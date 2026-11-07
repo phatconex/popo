@@ -46,13 +46,13 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 
 ## Bonk Island (2–12 players)
 - Shove everyone else into the sea. Last paw standing wins the round. The island is a hex grid whose outer tiles flash red, sink and fall away, shrinking it to one tile.
-- Moves: **Push** (quick shove), **Bonk** (hold to charge, release to wallop; slipping off the edge while charging sends you in), **Dash**.
+- Moves: **Push** (quick shove), **Bonk** (hold to charge, release to lunge and wallop; a Bonk that misses lunges all the way and can carry you into the sea), **Dash**.
   Knocked into the sea? You become a ghost on a cloud and drop **coconuts** on the island (they knock people away from the impact).
 - Points per round: 1st 5, 2nd 3, 3rd 2, 4th 1, plus 1 for every knock-out (the last hit within 4 s counts, coconut knock-outs included). Highest total after the rounds wins, then a podium.
 - Settings: map (default **Random**, which cycles Beach, Snow and Farm; or **Beach**, **Snow** with slippery **ice** tiles, **Farm** with slow, sticky **mud** tiles) and rounds (3 / 5 / 7, default 5).
 - Controls — desktop: WASD/arrows, J push, hold K then release to bonk, Space (or L) dash; ghost: J or Space drops a coconut.
   Phone: joystick on the left, blue Push, red Bonk (hold), green Dash, brown Coconut on the right.
-- Quick test timings: `BK_FAST=1 npm start` (shorter countdowns and breaks). `NET_LAG_MS=250` delays every message by 250 ms to feel a slow connection.
+- Quick test timings: `BK_FAST=1 npm start` (shorter countdowns and breaks). `NET_LAG_MS=250` delays every message by 125 ms each way (a 250 ms round trip) to feel a slow connection.
 - Bots: `node test/bot-match.js --bonk PORT N` runs a full bot match (2–6 bots; start the server with `BK_FAST=1` for short rounds);
   `node test/bot-match.js --bonk-join CODE PORT N` adds bots to your room so you can play against them.
 
