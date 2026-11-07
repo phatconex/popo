@@ -10,6 +10,7 @@ const Core = require('./core');
 // Critter Badminton (./games/badminton) is paused until it moves to 3D.
 const GAMES = {
   hideseek: require('./games/hideseek'),
+  bonk: require('./games/bonk'),
 };
 
 const PORT = process.env.PORT || 3000;
@@ -33,7 +34,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const core = new Core(GAMES);
+const core = new Core(GAMES, { lagMs: +process.env.NET_LAG_MS || 0 });
 new WebSocketServer({ server }).on('connection', ws => core.connect(ws));
 
 server.listen(PORT, () => {

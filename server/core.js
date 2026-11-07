@@ -18,8 +18,10 @@ const AVATARS = 24; // xem public/core3d/animals.js
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
 class Core {
-  constructor(games) {
+  // opts.lagMs: test switch — every message in either direction is delayed lagMs / 2 (order preserved).
+  constructor(games, opts = {}) {
     this.games = games;
+    this.lagMs = Math.max(0, +opts.lagMs || 0);
     this.rooms = new Map();
     this.nextId = 1;
     let last = Date.now();
@@ -32,13 +34,19 @@ class Core {
 
   connect(ws) {
     const conn = { ws, p: null };
+    const half = this.lagMs / 2;
+    if (half > 0) { // equal timeouts fire in order, so ordering survives
+      const raw = ws.send;
+      ws.send = (...a) => { setTimeout(() => { if (ws.readyState === 1) raw.apply(ws, a); }, half); };
+    }
     send(ws, { t: 'welcome', games: Object.values(this.games).map(g => g.meta) });
     ws.on('message', buf => {
       let m;
       try { m = JSON.parse(buf); } catch { return; }
-      if (m && typeof m === 'object') this.onMsg(conn, m);
+      if (!m || typeof m !== 'object') return;
+      if (half > 0) setTimeout(() => this.onMsg(conn, m), half); else this.onMsg(conn, m);
     });
-    ws.on('close', () => this.onClose(conn));
+    ws.on('close', () => { if (half > 0) setTimeout(() => this.onClose(conn), half); else this.onClose(conn); });
   }
 
   close() { clearInterval(this.timer); }

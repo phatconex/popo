@@ -144,3 +144,19 @@ test('core: team survives reconnect; profile.team ignored while playing', () => 
     assert.deepStrictEqual(teams(s[0]), [-1, 3]);
   } finally { core.close(); }
 });
+
+test('core: lagMs delays both directions', async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const core = new Core({ fake: fakeGame }, { lagMs: 100 });
+  try {
+    const a = sock(); core.connect(a); a.msg({ t: 'join', name: 'A', game: 'fake' });
+    assert.strictEqual(core.rooms.size, 0, 'incoming join is not processed synchronously');
+    assert.ok(!a.last('lobby') && !a.last('welcome'), 'nothing is sent synchronously');
+    await wait(70);
+    assert.strictEqual(core.rooms.size, 1, 'join processed after about lagMs/2');
+    assert.ok(!a.last('lobby'), 'reply is still on its way');
+    await wait(100);
+    assert.ok(a.last('lobby'), 'lobby arrives after about lagMs in total');
+    assert.ok(a.out.findIndex(m => m.t === 'welcome') < a.out.findIndex(m => m.t === 'joined'), 'order preserved');
+  } finally { core.close(); }
+});
