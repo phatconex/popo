@@ -15,6 +15,7 @@
 .bk-brk svg{width:26px;height:26px;flex:none}
 .bk-brk b{font-weight:400;font-size:24px;min-width:48px}
 .bk-brk b:empty{display:none}
+.bk-brk span:empty{display:none}
 .bk-brk.bk-hot{background:#ff5d6c;color:#fff;animation:bk-shake .25s infinite}
 .bk-brk.bk-hot svg path{stroke:#fff}
 @keyframes bk-shake{25%{transform:translate(-2px,1px)}75%{transform:translate(2px,-1px)}}
@@ -66,6 +67,7 @@
 @media (max-width:760px){
   .bk-top{gap:7px;top:10px}.bk-lv{font-size:10px;padding:3px 8px 5px}.bk-lv b{font-size:17px}
   .bk-brk{font-size:11px;padding:4px 9px 6px;gap:5px}.bk-brk b{font-size:17px;min-width:36px}.bk-brk svg{width:18px;height:18px}.bk-brk span{display:none}
+  .bk-brk.bk-hot b{font-size:14px}
   .bk-roster{top:74px;left:10px;gap:7px}.bk-rs{font-size:0;padding:2px;gap:0}.bk-rs i{width:18px;height:18px}.bk-rs em{display:none}
   .bk-feed{top:124px}.bk-feed div{font-size:13px}
   .bk-acts{transform:scale(.82);transform-origin:100% 100%;right:14px;bottom:14px}

@@ -382,8 +382,9 @@ function hudFrame() {
   const secs = Math.ceil(Math.max(0, next - clock)), last = !left;
   hud.top({
     rd, of: roundOf, alive: rows.filter(r => !r.out).length, total: rows.length, hot: warn,
-    label: last ? 'Last stand!' : warn ? 'Edge is' : 'Edge breaks in',
-    value: last ? '' : warn ? 'cracking!' : !Number.isFinite(next) ? '' : `${secs / 60 | 0}:${String(secs % 60).padStart(2, '0')}`,
+    // the two states carry their whole text in the value: phones hide the label, and the meaning must stay
+    label: last || warn ? '' : 'Edge breaks in',
+    value: last ? 'Last stand!' : warn ? 'Edge is cracking!' : !Number.isFinite(next) ? '' : `${secs / 60 | 0}:${String(secs % 60).padStart(2, '0')}`,
   });
   hud.roster(rows);
 }
