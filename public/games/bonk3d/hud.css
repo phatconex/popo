@@ -86,3 +86,25 @@
 }
 /* 9 to 12 players: colour dots only wherever the list would run into the corner controls */
 @media (max-height:640px){.bk-roster.bk-dense{gap:6px}.bk-dense .bk-rs{font-size:0;padding:2px;gap:0}.bk-dense .bk-rs i{width:16px;height:16px}.bk-dense .bk-rs em{display:none}}
+
+/* Overlays (overlays.js): count / big words, round results card; the shared podium hides the HUD like Hide & Seek's */
+.bk-big{position:absolute;left:0;right:0;top:34%;text-align:center;font-size:92px;pointer-events:none;opacity:0;transform:scale(.6);transition:all .3s cubic-bezier(.3,1.6,.5,1);line-height:1}
+.bk-big.bk-on{opacity:1;transform:none}
+.bk-big small{display:block;font-size:30px;margin-top:10px}
+.bk-res{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(36,48,74,.35);pointer-events:none}
+.bk-res *{pointer-events:none!important}
+.bk-card{width:min(520px,92vw);padding:18px 20px 20px;border-radius:26px;animation:bk-cin .35s cubic-bezier(.3,1.6,.5,1)}
+@keyframes bk-cin{from{transform:scale(.7) rotate(-3deg);opacity:0}}
+.bk-card .bk-hd{font-size:34px;text-align:center;color:#fff;margin:-46px 0 12px}
+.bk-rows{display:flex;flex-direction:column;gap:7px}
+.bk-row{display:grid;grid-template-columns:34px 26px 1fr 56px 52px 52px;align-items:center;gap:8px;font-size:18px;padding:4px 10px 6px;border-radius:12px;background:#f1f4fa}
+.bk-row.bk-h{background:none;font-size:12px;color:#6a7690;padding:0 10px}
+.bk-row.bk-me{background:#fff3c4;box-shadow:inset 0 0 0 3px #ffd23f}
+.bk-row .bk-pl{font-weight:400;font-size:22px;color:#6a7690}.bk-row.bk-first .bk-pl{color:#ffb81f}
+.bk-row i{width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 3px var(--ink)}
+.bk-row span:nth-child(3){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk-row .bk-k,.bk-row .bk-p,.bk-row .bk-t{text-align:right}.bk-row .bk-p{color:#2fae46}
+.bk-card .bk-note{text-align:center;font-size:13px;color:#6a7690;margin-top:12px}
+.bk-game.bk-final > :not(.podium):not(.podium-back){display:none!important}
+@media (max-width:760px){.bk-big{font-size:60px}.bk-big small{font-size:22px}}
+@media (max-height:500px) and (min-width:761px){.bk-big{font-size:54px;top:28%}.bk-big small{font-size:19px}.bk-card{padding:10px 14px 12px}.bk-card .bk-hd{font-size:24px;margin:-32px 0 6px}.bk-rows{gap:3px}.bk-row{font-size:14px;padding:2px 10px 3px}.bk-card .bk-note{display:none}}

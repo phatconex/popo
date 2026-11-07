@@ -305,7 +305,7 @@ test('full match in fast mode: 3 rounds, one final, end called once with the top
   assert.strictEqual(fin.length, 1);
   assert.deepStrictEqual(fin[0].rows[0], { id: 3, total: 15, rank: 1 });
   assert.strictEqual(api.ended.length, 0);
-  tick(g, 2.5);
+  tick(g, 7.5);
   assert.strictEqual(api.ended.length, 0);
   tick(g, 1);
   assert.deepStrictEqual(api.ended, [[3]]);
@@ -335,7 +335,7 @@ test('final with tied totals ends with all tied winners', () => {
   for (const id of g.gs.keys()) put(g, id, 0, 0);
   // both fall at once: places 2 and 2 -> 3 points each, so totals tie and both win
   fall(g, 1); fall(g, 2); tick(g, 1);
-  tick(g, 3.5);
+  tick(g, 8.5);
   assert.deepStrictEqual(api.ended[0].slice().sort(), [1, 2]);
 });
 

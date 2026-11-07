@@ -78,3 +78,11 @@ input,textarea{font-family:'Lilita One',system-ui,sans-serif}
 @keyframes irisIn{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(150% at 50% 50%)}}
 @keyframes irisOut{from{clip-path:circle(150% at 50% 50%)}to{clip-path:circle(0% at 50% 50%)}}
 @keyframes pawbob{to{transform:translateY(-10px) rotate(8deg)}}
+
+/* Shared final podium (core3d/podium.js) */
+.podium{position:absolute;left:0;right:0;top:16px;text-align:center;pointer-events:none!important}
+.podium *{pointer-events:none!important}
+.podium h2{margin:0;font-weight:400;font-size:min(12vw,60px);color:#ffd23f;-webkit-text-stroke:8px var(--ink);paint-order:stroke fill;text-shadow:0 5px 0 rgba(20,30,50,.3)}
+.podium .rest{display:inline-flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;max-width:92vw}
+.podium .rest span{font-size:15px;padding:2px 10px 4px}
+.podium-back{position:absolute;left:50%;bottom:22px;transform:translateX(-50%)}

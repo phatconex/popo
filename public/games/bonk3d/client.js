@@ -11,6 +11,8 @@ import { buildWorld } from './world.js';
 import { Fighters, FL } from './fighters.js';
 import { Fx } from './fx.js';
 import { Hud } from './hud.js';
+import { Overlays } from './overlays.js';
+import { podium as makePodium } from '../../core3d/podium.js';
 
 const BK = window.BK;
 const DELAY = .1;    // others are drawn this far behind the round clock
@@ -27,7 +29,7 @@ const GHOST_KEYS = new Set(['KeyJ', 'KeyK', 'Space']);
 const r2 = v => Math.round(v * 100) / 100;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
-let ctx = null, L = null, hud = null, world = null, fighters = null, fx = null, offFrame = null, reticle = null;
+let ctx = null, L = null, hud = null, ov = null, podium = null, resT = 0, finalT = 0, finalRows = null, world = null, fighters = null, fx = null, offFrame = null, reticle = null;
 let rd = 0, buildRd = 0, building = null, queue = [], buildId = 0; // buildId: bumped by every new round and by unmount so stale async work bails out
 let clock = 0, lastC = 0, ph = '', ended = false;
 let camSnap = true;
@@ -69,6 +71,7 @@ export async function mount(c) {
   L = ctx.ui.layer('bk-game');
   hud = new Hud(L, { isTouch: ctx.engine.isTouch, onPress: press, onRelease: release, onMove: setMove });
   hud.idle(true);
+  ov = new Overlays(L, { sfx: ctx.sfx });
   ctx.ui.emoteControl(L, e => ctx.net.send({ t: 'emote', e }));
   on(window, 'keydown', onKeyDown);
   on(window, 'keyup', onKeyUp);
@@ -82,10 +85,13 @@ export function unmount() {
   buildId++;
   for (const [el, ev, fn, o] of listeners) el.removeEventListener(ev, fn, o);
   listeners.length = 0;
+  clearTimeout(resT); clearTimeout(finalT); finalRows = null;
+  if (podium) { podium.dispose(); podium = null; }
   teardownRound();
+  if (ov) ov.dispose();
   if (hud) hud.destroy();
   if (L) L.remove();
-  hud = L = offFrame = null; roster = []; breaks = []; building = null; queue = []; rd = buildRd = 0; ph = '';
+  hud = ov = L = offFrame = null; roster = []; breaks = []; building = null; queue = []; rd = buildRd = 0; ph = '';
   keys.clear(); move.x = move.z = 0;
 }
 
@@ -214,6 +220,7 @@ function install(d, w, fs, players) {
   fx.solidAt = (x, z) => world.solidAt(x, z);
   reticle = makeReticle(); world.scene.add(reticle);
   rd = d.rd; ph = d.c < 0 ? 'count' : 'play'; ended = false;
+  clearTimeout(resT); clearTimeout(finalT); finalRows = null; ov.reset();
   syncClock(d.c, true);
   roundOf = d.of | 0; breaks = Array.isArray(d.breaks) ? d.breaks : [];
   roster = players.map(p => ({ id: p.id, name: p.name, me: p.me }));
@@ -285,8 +292,8 @@ function handle(d) {
     case 'fx': onFx(d); break;
     case 'knock': onKnock(d); break;
     case 'fix': onFix(d); break;
-    case 'roundEnd': for (const r of d.rows || []) kos.set(r.id, r.ko | 0); ended = true; break; // the server's counts win
-    case 'final': ended = true; break;
+    case 'roundEnd': for (const r of d.rows || []) kos.set(r.id, r.ko | 0); ended = true; onRoundEnd(d); break; // the server's counts win
+    case 'final': ended = true; finalRows = d.rows || []; break;
   }
 }
 
@@ -336,6 +343,35 @@ function onOut(d) {
   const p = pend.get(d.id); if (p) p.ok = true;
 }
 
+// ---- round end: big words, results card, and after the last round the shared podium ----
+const RES_AT = 1100, RES_LAST = 4000; // ms: the card comes after the big words; on the last round it stays this long
+function onRoundEnd(d) {
+  const { sfx } = ctx, rows = d.rows || [];
+  if (d.win === myId) { ov.big('YOU WIN!<small>Last paw standing</small>', 1000); sfx.win(); }
+  else if (d.win) ov.big(`${esc(nameOf(d.win).toUpperCase())} WINS!<small>Last paw standing</small>`, 1000);
+  else ov.big('DRAW!', 1000);
+  clearTimeout(resT); clearTimeout(finalT);
+  resT = setTimeout(() => {
+    if (!ov) return;
+    ov.results(rows, rows.map(r => ({ id: r.id, name: nameOf(r.id), color: ctx.app.colorOf(r.id) })), myId, d.rd, roundOf);
+    if (d.last) finalT = setTimeout(showPodium, RES_LAST);
+  }, RES_AT);
+}
+
+async function showPodium() {
+  if (!ov || !world || podium) return;
+  const my = buildId, lp = (ctx.app.lobby && ctx.app.lobby.players) || [];
+  const rows = (finalRows || []).map(r => ({ id: r.id, name: nameOf(r.id), score: r.total | 0 }));
+  ov.closeResults();
+  let p;
+  try { p = await makePodium({ layer: L, engine: ctx.engine, sfx: ctx.sfx, rows, players: lp, myId }); } catch (e) { console.error(e); return; }
+  if (my !== buildId || !L) { p.dispose(); return; } // left the game while the podium loaded
+  podium = p;
+  L.classList.add('bk-final');
+  ctx.engine.setScene(podium.scene);
+  teardownRound(); // the island is done: drops the animal name tags too
+}
+
 // ---- HUD data ----
 const ME_COL = '#e0a400', FEED_VERB = { bonk: 'bonked', push: 'pushed', dash: 'rammed', bump: 'knocked' };
 const lobbyOf = id => ctx.app.lobby && ctx.app.lobby.players.find(p => p.id === id);
@@ -357,7 +393,7 @@ function outFeed(d) {
 function outSound(d) {
   const { sfx } = ctx, p = lobbyOf(d.id), a = window.ANIMALS && window.ANIMALS[p ? p.av | 0 : 0];
   sfx.animal(a ? a.id : '');
-  if (d.id === myId) sfx.lose();
+  if (d.id === myId) { sfx.lose(); ov.big('SPLASH!<small>You can still drop coconuts</small>', 1500); }
 }
 
 // Every frame: roster, top chips, buttons.
@@ -599,6 +635,7 @@ function stepWatches(dt) {
 }
 
 function frame(dt, t) {
+  if (podium) { podium.tick(dt, t); return; }
   if (!world) return;
   const cam = ctx.engine.camera;
   clock = Math.min(clock + dt, lastC + AHEAD);
@@ -635,6 +672,7 @@ function frame(dt, t) {
   for (const [id, p] of pend) if ((p.t -= dt) <= 0 && p.ok) seat(id);
   stepWatches(dt);
   hudFrame();
+  ov.count(clock);
   // ghost: aim the reticle (NUT.aim m/s, inside the island) and drop coconuts on it
   reticle.visible = myMode() === 'ghost' && !ended;
   if (reticle.visible) {

@@ -63,11 +63,6 @@
 .hs-res .tag{display:inline-block;font-size:12px;color:#fff;border-radius:8px;padding:0 6px 1px;margin-left:6px}
 .hs-res .pts{color:#2fae46}
 .hs-res .next{text-align:center;margin-top:8px;color:var(--soft);font-size:15px}
-.hs-podium{position:absolute;left:0;right:0;top:16px;text-align:center;pointer-events:none!important}
-.hs-podium h2{margin:0;font-weight:400;font-size:min(12vw,60px);color:#ffd23f;-webkit-text-stroke:8px var(--ink);paint-order:stroke fill;text-shadow:0 5px 0 rgba(20,30,50,.3)}
-.hs-podium .rest{display:inline-flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;max-width:92vw}
-.hs-podium .rest span{font-size:15px;padding:2px 10px 4px}
-.hs-back{position:absolute;left:50%;bottom:22px;transform:translateX(-50%)}
 @media (max-width:760px){
   .hs-timer{font-size:26px;min-width:92px}.hs-left{font-size:15px;padding:6px 10px}.hs-dots i{width:12px;height:12px}
   .hs-top{justify-content:flex-start;padding-left:14px;top:12px}
@@ -83,8 +78,8 @@
   .hs-count{top:13vh}
 }
 /* decorative layers must never eat clicks meant for the 3D view */
-.hs-count *,.hs-dim *,.hs-card *,.hs-podium *,.hs-feed *,.hs-top *,.hs-role *,.hs-hp *,.hs-keys *,.hs-spec *{pointer-events:none!important}
-.hs.final > :not(.hs-podium):not(.hs-back){display:none!important}
+.hs-count *,.hs-dim *,.hs-card *,.hs-feed *,.hs-top *,.hs-role *,.hs-hp *,.hs-keys *,.hs-spec *{pointer-events:none!important}
+.hs.final > :not(.podium):not(.podium-back){display:none!important}
 /* juicier buttons: pop in, cooldown sweep, flash when ready */
 .hs-act{animation:actin .5s cubic-bezier(.3,1.7,.5,1) both;transition:transform .09s}
 @keyframes actin{from{transform:scale(0) rotate(-20deg)}}

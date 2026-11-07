@@ -4,7 +4,7 @@
 const BK = require('../../../public/games/bonk3d/shared.js');
 
 const T = { count: 3, first: 15, every: 12, warn: 3, hold: 20, single: 4, pause: 6, final: 12 };
-const FAST_T = { count: 1, first: 3, every: 3, warn: 1, hold: 3, single: 1, pause: 2, final: 3 };
+const FAST_T = { count: 1, first: 3, every: 3, warn: 1, hold: 3, single: 1, pause: 2, final: 8 };
 const MAPS = ['beach', 'snow', 'farm'];
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const TAU = Math.PI * 2;
