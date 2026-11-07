@@ -99,6 +99,7 @@ export async function enter(ctx) {
         <div><span><b style="background:#55d36b">HIDERS</b> look exactly like the farm animals. Walk slowly, stay with the herd, hide behind trees. Running leaves footprints!</span></div>
         <div><span><b style="background:#ff5d6c">SEEKER</b> has a water gun. Squirt the fakes — but hitting a real animal costs water.</span></div>
         <div><span>Hiders get tricks: <b style="background:#ff8a4c">Run</b> <b style="background:#ffb81f">Call</b> <b style="background:#55d36b">Decoy</b>. Calling takes 3 s off the clock but shows the seeker where you are. Everyone takes a turn as the seeker.</span></div>
+        <div><span><b style="background:#4fb4ff">BONK ISLAND</b> Shove everyone into the sea. <b style="background:#4fb4ff">Push</b> <b style="background:#ff5d6c">Bonk</b> (hold to charge) <b style="background:#55d36b">Dash</b>. The edge keeps breaking. Knocked out? Drop coconuts from your cloud.</span></div>
       </div>`,
     });
   }

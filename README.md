@@ -44,6 +44,18 @@ window.POPO_SERVER = 'https://popo-xxxx.onrender.com';
 - Settings: map, rounds, and round time (2 / 3 / 4 / 5 min).
 - Quick test timings: `HS_HIDE_T=5 HS_ROUND_T=45 npm start` (`HS_ROUND_T` overrides the Time setting).
 
+## Bonk Island (2–12 players)
+- Shove everyone else into the sea. Last paw standing wins the round. The island is a hex grid whose outer tiles flash red, sink and fall away, shrinking it to one tile.
+- Moves: **Push** (quick shove), **Bonk** (hold to charge, release to wallop; slipping off the edge while charging sends you in), **Dash**.
+  Knocked into the sea? You become a ghost on a cloud and drop **coconuts** on the island (they knock people away from the impact).
+- Points per round: 1st 5, 2nd 3, 3rd 2, 4th 1, plus 1 for every knock-out (the last hit within 4 s counts). Highest total after the rounds wins, then a podium.
+- Settings: rounds (3 / 5 / 7) and map: **Random** (cycles Beach, Snow and Farm), **Beach**, **Snow** (slippery **ice** tiles), **Farm** (slow, sticky **mud** tiles).
+- Controls — desktop: WASD/arrows, J push, hold K then release to bonk, Space (or L) dash; ghost: J or Space drops a coconut.
+  Phone: joystick on the left, blue Push, red Bonk (hold), green Dash, brown Coconut on the right.
+- Quick test timings: `BK_FAST=1 npm start` (shorter countdowns and breaks). `NET_LAG_MS=250` delays every message by 250 ms to feel a slow connection.
+- Bots: `node test/bot-match.js --bonk PORT N` runs a full bot match (2–6 bots, needs the server started with `BK_FAST=1`);
+  `node test/bot-match.js --bonk-join CODE PORT N` adds bots to your room so you can play against them.
+
 ## The app
 - Open screen → Play (new room) or Join Room (4-letter code or `?room=ABCD` invite link).
 - 3D lobby with up to 12 players: pick one of 24 animals, Ready, host picks the game and its settings, Start.
@@ -57,10 +69,13 @@ Critter Badminton is paused while it moves to 3D (its code stays in `server/game
 server/index.js               static files + WebSocket, game registry
 server/core.js                rooms, rejoin, ready flag, emotes, settings
 server/games/hideseek/        rules (index.js) + map generator (maps.js)
+server/games/bonk/            Bonk Island rules (index.js) + island/map generator
 public/index.html, app.js     page shell + screen router
 public/core3d/                engine, asset loader, network, UI kit, sound, animals table (shared with the server)
 public/core3d/screens/        Open and Lobby screens
 public/games/hideseek3d/      world builder, entities, HUD, effects, overlays
+public/games/bonk3d/          Bonk Island shared physics, world, HUD, overlays
+public/core3d/podium.js       podium shared by both games
 public/assets/kenney/         3D models (Kenney, CC0) + licenses
 test/                         node:test unit tests + bot match script
 docs/superpowers/             design spec and implementation plan
