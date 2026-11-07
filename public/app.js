@@ -7,9 +7,8 @@ import * as assets from './core3d/assets.js';
 import * as Open from './core3d/screens/open.js';
 import * as Lobby from './core3d/screens/lobby.js';
 import * as HideSeek from './games/hideseek3d/client.js';
-import * as BlindDrive from './games/blinddrive3d/client.js';
 
-const GAMES = { hideseek: HideSeek, blinddrive: BlindDrive };
+const GAMES = { hideseek: HideSeek };
 let screen = null, screenName = '', game = null, gameId = null, routing = Promise.resolve();
 let gameQueue = null; // game messages that arrive while the game is still being mounted
 let retiring = false; // the finished game is waiting to be unmounted: new game messages must not reach it

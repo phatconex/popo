@@ -63,10 +63,9 @@ const css = `
 }`;
 const ART = {
   hideseek: '<rect x="6" y="34" width="108" height="24" rx="6" fill="#3fa94f"/><circle cx="30" cy="30" r="18" fill="#2f8c40"/><circle cx="46" cy="24" r="14" fill="#2f8c40"/><rect x="74" y="20" width="26" height="22" rx="4" fill="#d9a35b" stroke="#24304a" stroke-width="3"/><circle cx="40" cy="36" r="5" fill="#fff"/><circle cx="41" cy="36" r="2.4" fill="#24304a"/><path d="M96 44 l14 -6" stroke="#4fb4ff" stroke-width="4" stroke-linecap="round"/>',
-  blinddrive: '<rect x="44" y="0" width="32" height="62" fill="#4b4f63"/><rect x="58" y="4" width="4" height="10" fill="#fff"/><rect x="58" y="24" width="4" height="10" fill="#fff"/><rect x="48" y="30" width="18" height="26" rx="5" fill="#ff5d6c" stroke="#24304a" stroke-width="3"/>',
   badminton: '<rect x="0" y="48" width="120" height="14" fill="#3fa94f"/><rect x="58" y="22" width="4" height="28" fill="#24304a"/><path d="M20 40 Q 60 -6 100 36" stroke="#fff" stroke-width="3" stroke-dasharray="4 5" fill="none"/><circle cx="84" cy="18" r="5" fill="#fff" stroke="#24304a" stroke-width="2"/>',
 };
-const GAME_COL = { hideseek: '#55d36b', blinddrive: '#4fb4ff' };
+const GAME_COL = { hideseek: '#55d36b' };
 const TEAM_COL = ['#ff5d6c', '#4fb4ff', '#55d36b', '#ffc727'], NO_TEAM = '#c4cad6';
 const CROWN = '<svg width="44" height="32" viewBox="0 0 46 34"><path d="M4 30 L2 8 L14 18 L23 3 L32 18 L44 8 L42 30 Z" fill="#ffd23f" stroke="#24304a" stroke-width="4" stroke-linejoin="round"/><circle cx="23" cy="22" r="3.5" fill="#ff5d6c"/></svg>';
 const BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="#24304a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';

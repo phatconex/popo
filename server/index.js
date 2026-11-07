@@ -10,7 +10,6 @@ const Core = require('./core');
 // Critter Badminton (./games/badminton) is paused until it moves to 3D.
 const GAMES = {
   hideseek: require('./games/hideseek'),
-  blinddrive: require('./games/blinddrive'),
 };
 
 const PORT = process.env.PORT || 3000;
