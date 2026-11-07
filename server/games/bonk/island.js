@@ -118,17 +118,12 @@ function makeIsland({ n, map, rand, T: TT = T }) {
   };
 }
 
-// 'random' shuffles the 3 maps and cycles through them, reshuffling each cycle so the first of a
-// new cycle never equals the last of the previous one. Any other value is a fixed map.
+// 'random' picks one random permutation of the 3 maps and returns perm[roundIndex % 3], so any 3
+// consecutive rounds contain all 3 maps. Stateless in roundIndex. Any other value is a fixed map.
 function mapPicker(setting, rand) {
   if (setting !== 'random') return () => setting;
-  let order = [], last = null;
-  return () => {
-    if (!order.length) {
-      do order = shuffle(MAPS, rand); while (order[0] === last);
-    }
-    return (last = order.shift());
-  };
+  const perm = shuffle(MAPS, rand);
+  return (roundIndex) => perm[roundIndex % 3];
 }
 
 module.exports = { T, FAST_T, ringsFor, makeIsland, mapPicker, tileState: BK.tileState };

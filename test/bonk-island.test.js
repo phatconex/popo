@@ -120,12 +120,17 @@ test('spawns', () => {
 });
 
 test('mapPicker', () => {
-  const rand = mulberry32(7);
-  const pick = mapPicker('random', rand);
-  assert.deepStrictEqual(new Set([0, 1, 2].map(pick)), new Set(['beach', 'snow', 'farm']));
-  const p2 = mapPicker('random', mulberry32(9));
-  let prev = null;
-  for (let i = 0; i < 30; i++) { const m = p2(i); assert.notStrictEqual(m, prev); prev = m; }
-  const ps = mapPicker('snow', rand);
+  const firsts = new Set();
+  for (let seed = 1; seed <= 20; seed++) {
+    const pick = mapPicker('random', mulberry32(seed));
+    const seq = Array.from({ length: 30 }, (_, i) => pick(i));
+    firsts.add(seq[0]);
+    for (let i = 0; i + 3 <= 30; i++) {
+      assert.deepStrictEqual(new Set(seq.slice(i, i + 3)), new Set(['beach', 'snow', 'farm']), `seed ${seed} window ${i}`);
+    }
+    for (let i = 0; i < 30; i++) assert.strictEqual(pick(i), seq[i], 'stateless');
+  }
+  assert.ok(firsts.size > 1, 'different seeds give different first maps');
+  const ps = mapPicker('snow', mulberry32(1));
   for (let i = 0; i < 5; i++) assert.strictEqual(ps(i), 'snow');
 });
