@@ -9,10 +9,11 @@ Mockup đã được duyệt: `docs/superpowers/mockups/2026-11-07-bonk-island.h
 - 2–12 người chơi online trong một phòng Pawty, trên máy tính và điện thoại.
 - Đẩy, đấm, lướt để làm người khác rớt khỏi đảo lục giác giữa biển. Mép đảo vỡ dần nên ván nào cũng kết thúc và có người thắng.
 - Người bị loại không phải ngồi chờ: thành ma trên mây, thả dừa xuống phá.
+- 3 map: **Beach**, **Snow**, **Farm**, mỗi map có một điểm khác nhỏ trong cách chơi (mục 2.6).
 - Chơi mượt với độ trễ khoảng 0,25 s (đo được tới server Render hiện tại).
 
 ### Không làm trong đợt này
-- Đảo tuyết, đảo nông trại (chỉ một kiểu đảo nhiệt đới).
+- Map thứ 4 trở đi.
 - Vật phẩm, túm và quăng người, bot trong game thật.
 - Chuyển server Render sang Singapore (người dùng tự quyết, không sửa `render.yaml`).
 
@@ -20,6 +21,7 @@ Mockup đã được duyệt: `docs/superpowers/mockups/2026-11-07-bonk-island.h
 - `npm test` qua hết; `node test/bot-match.js --bonk PORT N` chơi hết một trận và in `OK`.
 - Hai tab trên máy với `NET_LAG_MS=250` chơi mượt: con của mình phản hồi ngay, đánh trúng trên màn hình là đối phương văng.
 - Chơi được trên máy tính, điện thoại dọc và ngang; console không lỗi.
+- Cả 3 map đều chơi được, và cảm nhận được khác biệt: băng trơn ở Snow, bùn bám ở Farm.
 - Hide & Seek vẫn chạy như cũ.
 
 ## 2. Luật chơi
@@ -32,12 +34,13 @@ Mockup đã được duyệt: `docs/superpowers/mockups/2026-11-07-bonk-island.h
 | 9–12 | 5 | 91 |
 
 - Ô lục giác đỉnh nhọn theo trục z, bán kính ngoại tiếp `S = 1.05 m`. Toạ độ trục (q, r): `x = S·√3·(q + r/2)`, `z = S·1.5·r`. Vòng = `max(|q|, |r|, |q+r|)`.
-- Mặt ô ở `y = 0`, mặt biển ở `y = -1.15`. Vòng ngoài cùng là cát, các vòng trong là cỏ.
-- 2 cây dừa là vật cản (bán kính 0,38 m) trên 2 ô của vòng 2, đối diện nhau; cây rơi theo ô.
+- Mặt ô ở `y = 0`, mặt biển ở `y = -1.15`. Màu ô và vật trang trí theo map (mục 2.6).
+- 2 vật cản (bán kính 0,38 m) trên 2 ô của vòng 2, đối diện nhau; vật cản rơi theo ô.
 - Vị trí xuất phát: chia đều trên vòng tròn bán kính `0.6 × bán kính đảo`, quay mặt vào giữa.
 
 ### 2.2 Một trận
-- Cài đặt trong sảnh: **Rounds** `3 / 5 / 7`, mặc định `5`.
+- Cài đặt trong sảnh: **Map** `Random / Beach / Snow / Farm`, mặc định `Random`; **Rounds** `3 / 5 / 7`, mặc định `5`.
+- Map `Random`: mỗi ván một map, xoay vòng theo thứ tự ngẫu nhiên nên 3 ván liền nhau luôn đủ 3 map.
 - Hết các ván: podium như Hide & Seek, người tổng điểm cao nhất được tính thắng (cộng `wins` trong sảnh).
 
 ### 2.3 Một ván (đồng hồ ván `c`, `c = 0` là lúc hiện "BONK!")
@@ -58,6 +61,21 @@ Mockup đã được duyệt: `docs/superpowers/mockups/2026-11-07-bonk-island.h
 - Thứ hạng = số người chưa bị loại tại lúc rớt + 1. Điểm theo hạng: `[5, 3, 2, 1]`, hạng 5 trở đi 0.
 - **+1 mỗi lần hạ gục**: tính cho người đánh trúng nạn nhân gần nhất trong vòng **4 s** trước khi rớt (kể cả dừa của ma, kể cả văng dây chuyền). Tự rớt thì không ai được.
 
+### 2.6 Ba map
+Mỗi ô có một loại mặt: thường, băng hoặc bùn. Loại mặt do server chọn đầu ván và gửi kèm `round`.
+
+| | Beach | Snow | Farm |
+|---|---|---|---|
+| Ô | vòng ngoài cát `#f6e2a4`, trong cỏ `#86d862` | tuyết `#f4f8ff`, ô băng `#bfe9ff` bóng | cỏ đậm `#7cc957`, vòng ngoài cỏ khô `#e8cf7a`, ô bùn `#7a5232` bóng ướt |
+| Vật cản (2) | `pirate/palm-bend`, `pirate/palm-straight` | `holiday/snowman`, `holiday/tree-snow-a` | `nature/tree_oak`, `nature/log_stack` |
+| Trang trí trên ô (không cản) | hoa, cỏ `nature/` | `holiday/present-a-cube`, `candy-cane-red`, `snow-pile`, `rocks-small` | `nature/crop_pumpkin`, `crop_carrot`, `crops_cornStageD`, hoa |
+| Biển, trời | biển `#1f97d4`, trời `#8fd8ff` | biển `#1a6fae` có tảng băng trôi, trời `#bfe6ff` | hồ `#2a9fc4` có lá súng (`nature/lily_large`), trời `#8fd8ff` |
+| Phía xa | đảo cát nhỏ có dừa | đảo tuyết có thông phủ tuyết | đồi cỏ có `town/windmill`, `town/watermill` |
+| Điểm khác | không | **ô băng**: trơn (mục 3.2) | **ô bùn**: chậm nhưng bám (mục 3.2) |
+
+- **Snow:** khoảng 40% số ô là băng, gom thành vài mảng liền nhau (chọn 3–5 ô gốc rồi loang ra); ô giữa luôn là tuyết thường.
+- **Farm:** số ô bùn là 4 (2–4 người), 6 (5–8 người), 8 (9–12 người); không đặt ở vòng ngoài cùng và không đặt ở ô giữa.
+
 ## 3. Điều khiển và vật lý (giá trị dùng chung trong `shared.js`)
 
 ### 3.1 Điều khiển
@@ -75,6 +93,15 @@ Hướng nhìn = hướng đang đi (quay 14 rad/s). Mũi tên vàng dưới ch�
 - Tốc độ đi 4,4 m/s; khi đang gồng Bonk 1,7 m/s. Tăng tốc về vận tốc mong muốn theo `1 - e^(-14·dt)`.
 - Khi choáng: không điều khiển được, vận tốc giảm theo ma sát `e^(-4·dt)` trên đất, `e^(-0.9·dt)` khi đang bay.
 - Trọng lực 24 m/s². Thân là hình tròn bán kính 0,4 m.
+- Loại mặt dưới chân (chỉ khi đang đứng trên ô, không áp dụng khi đang bay):
+
+| Mặt | Tốc độ đi | Tăng tốc | Ma sát khi choáng |
+|---|---|---|---|
+| Thường | 4,4 m/s | 14 | 4 |
+| Băng (Snow) | 4,4 m/s | 4 | 1,8 |
+| Bùn (Farm) | 2,6 m/s | 14 | 9 |
+
+  Băng: khó dừng và đổi hướng, bị đánh thì trượt xa hơn nhiều. Bùn: đi chậm nhưng bị đánh ít trượt.
 - Rơi: đang đứng (y = 0) hoặc vừa đáp xuống mà điểm tâm không nằm trên ô còn nguyên (ô ở trạng thái `drop` coi như mất) thì bắt đầu rơi; rơi tới `y < -1.1` là rớt nước.
 - Bước mô phỏng tối đa 1/120 s để cú văng nhanh không xuyên qua vật.
 
@@ -119,7 +146,7 @@ Máy → server:
 Server → máy:
 | `d` | Gửi cho |
 |---|---|
-| `{t:'round', rd, of, rings, palms, breaks, spawn, c}` | mọi người, đầu ván và khi vào lại. `breaks`: `[[q, r, warnAt, dropAt], ...]` theo đồng hồ ván; `spawn`: `{id: [x, z, f]}` |
+| `{t:'round', rd, of, map, rings, obst, surf, breaks, spawn, c}` | mọi người, đầu ván và khi vào lại. `map` = `beach` / `snow` / `farm`; `obst`: `[[q, r], [q, r]]` hai ô có vật cản; `surf`: `[[q, r, 1 \| 2], ...]` các ô băng (1) hoặc bùn (2); `breaks`: `[[q, r, warnAt, dropAt], ...]` theo đồng hồ ván; `spawn`: `{id: [x, z, f]}` |
 | `{t:'s', c, ph, p, nuts}` | mọi người, 20 Hz. `p`: `[[id, x, z, y, f, fl, ch, ghost], ...]`; `nuts`: `[[x, z, landAt], ...]` |
 | `{t:'knock', vx, vz, vy, stun, by, a}` | chỉ nạn nhân |
 | `{t:'fx', a, id, x, z, c}` | mọi người: hiệu ứng `push` / `bonk` / `dash` / `thunk` / `splash` |
@@ -152,9 +179,9 @@ Server → máy:
 ### 5.1 File
 | File | Việc |
 |---|---|
-| `public/games/bonk3d/shared.js` | UMD như `core3d/animals.js`: hằng số mục 3, `step(body, input, dt, isGround)`, toạ độ lục giác, `pushHits`, `bonkReach`, `hitDir`, `collide` |
+| `public/games/bonk3d/shared.js` | UMD như `core3d/animals.js`: hằng số mục 3 (cả bảng loại mặt), `step(body, input, dt, groundAt)` với `groundAt(x, z)` trả về loại mặt hoặc không có ô, toạ độ lục giác, `pushHits`, `bonkReach`, `hitDir`, `collide` |
 | `client.js` | `mount / unmount / onMsg / onEmote`; vòng lặp con của mình, gửi `st` 20 Hz, áp `knock` và `fix`, nội suy người khác, đồng hồ ván theo `c` trong bản chụp |
-| `world.js` | đảo (ô cột lục giác, viền bọt), biển gợn sóng low-poly, đảo nhỏ phía xa, mây, đám mây ma, trạng thái ô theo lịch vỡ |
+| `world.js` | 3 map theo bảng 2.6: đảo (ô cột lục giác, viền bọt, ô băng và bùn), biển hoặc hồ gợn sóng low-poly, cảnh phía xa, mây, đám mây ma, trạng thái ô theo lịch vỡ |
 | `fighters.js` | con thú (`assets.pet`), nghiêng khi gồng, lộn nhào khi bay, sao choáng, vòng gồng, bóng, thẻ tên, mũi tên hướng, chuyển sang ma |
 | `fx.js` | nước bắn, sao, bụi, chữ nổi (`BONK!`, `MEGA BONK!`, `Push!`, `THUNK!`, `SPLASH!`), rung camera, khựng 60 ms khi mình đánh trúng |
 | `hud.js`, `hud.css` | xem 5.2 |
@@ -176,7 +203,7 @@ Camera: khung vừa phần đảo còn lại, nghiêng 25% về phía trung bìn
 - `public/app.js`: `GAMES.bonk`; `public/index.html`: link `games/bonk3d/hud.css` và `<script src="games/bonk3d/shared.js">`.
 - `public/core3d/screens/lobby.js`: `ART.bonk` (đảo lục giác nhỏ có 2 con thú và ngôi sao), `GAME_COL.bonk = '#4fb4ff'`.
 - `public/core3d/screens/open.js`: thêm Bonk Island vào How to Play.
-- `meta`: `{ id: 'bonk', name: 'Bonk Island', desc: 'Shove your friends into the sea. Last paw standing wins!', min: 2, max: 12, tag: 'Brawl', settings: [rounds] }`.
+- `meta`: `{ id: 'bonk', name: 'Bonk Island', desc: 'Shove your friends into the sea. Last paw standing wins!', min: 2, max: 12, tag: 'Brawl', settings: [map, rounds] }`.
 - README: thêm mục Bonk Island và cấu trúc thư mục.
 
 ## 6. Trường hợp biên
@@ -188,8 +215,8 @@ Camera: khung vừa phần đảo còn lại, nghiêng 25% về phía trung bìn
 - Số liệu lạ từ máy gửi lên (NaN, quá lớn): kẹp lại hoặc bỏ.
 
 ## 7. Kiểm tra
-- `test/bonk-shared.test.js`: quãng văng Push khoảng 1–2 m, Bonk đầy khoảng 4–6 m; Bonk trượt ở mép tự lao xuống biển; phát hiện rơi; `xzToHex` đúng với mọi ô.
-- `test/bonk-island.test.js`: số ô theo số người (37 / 61 / 91); lịch vỡ luôn dừng ở 1 ô; thời điểm đúng (15, 27, ...; giữ 20 s; mỗi 4 s); vỡ nửa vòng là một cung liền.
+- `test/bonk-shared.test.js`: quãng văng Push khoảng 1–2 m, Bonk đầy khoảng 4–6 m; trên băng trượt xa hơn, trên bùn trượt ngắn hơn và đi chậm hơn; Bonk trượt ở mép tự lao xuống biển; phát hiện rơi; `xzToHex` đúng với mọi ô.
+- `test/bonk-island.test.js`: số ô theo số người (37 / 61 / 91); lịch vỡ luôn dừng ở 1 ô; thời điểm đúng (15, 27, ...; giữ 20 s; mỗi 4 s); vỡ nửa vòng là một cung liền; Snow khoảng 40% ô băng và ô giữa không phải băng; Farm đúng số ô bùn, không ở vòng ngoài và ô giữa; vật cản không trùng ô xuất phát; `Random` xoay đủ 3 map.
 - `test/bonk.test.js` (server với api giả như `hideseek.test.js`): nhận `hit` hợp lý, từ chối khi xa quá, chưa hết thời gian chờ, không có `act`, trúng hai lần một đòn; `fix` khi nhảy vị trí; công hạ gục trong 4 s (kể cả dừa và dây chuyền); bảng điểm; rớt mạng vẫn bị đẩy; thoát giữa ván tính là rớt; dưới 2 người thì kết thúc; vào lại nhận `round`; `final` gọi `end` với người thắng.
 - `test/bot-match.js --bonk PORT N` (2–6 bot, `BK_FAST=1`, Rounds 3): bot tự mô phỏng bằng `shared.js`, đi về người gần nhất, gửi `act` / `hit` khi trong tầm, báo `fall`, khi là ma thì thả dừa; in kết quả và `OK`.
 - Trình duyệt: máy tính, điện thoại dọc và ngang; hai tab đấu nhau với `NET_LAG_MS=250`.
@@ -199,7 +226,7 @@ Camera: khung vừa phần đảo còn lại, nghiêng 25% về phía trung bìn
 2. `island.js` và test lịch vỡ.
 3. Server `bonk/index.js` và test luật, mạng.
 4. `NET_LAG_MS` trong core, chế độ `--bonk` của bot-match.
-5. Client: thế giới, con thú, hiệu ứng.
+5. Client: thế giới 3 map, con thú, hiệu ứng.
 6. Client: mạng (tự tính con mình, nội suy, knock, fix).
 7. HUD, đếm ngược, bảng điểm, podium.
 8. Gắn vào app (sảnh, How to Play, README).
