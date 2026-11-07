@@ -1,14 +1,16 @@
 // Bonk Island client: builds each round's island from `round`, runs your own animal here with the shared physics
 // (instant control, "what you see is what you hit", spec §4.1) and reports it to the server, draws everyone else from
 // the 20 Hz snapshots (interpolated 0.1 s behind the round clock), shows splashes, ghosts, coconuts and hit effects,
-// and runs the camera (spec §5.1). HUD buttons and the joystick (Task 8) drive the same paths as the keyboard through
-// press / release / setMove; status() tells them cooldowns and whether you are a ghost.
+// and runs the camera (spec §5.1). The HUD (hud.js) buttons and joystick drive the same paths as the keyboard through
+// press / release / setMove; status() tells it cooldowns and whether you are a ghost. The HUD's data (roster, feed,
+// edge timer, sounds) is gathered here.
 import * as THREE from 'three';
 import { followSun } from '../../core3d/engine.js';
 import { esc } from '../../core3d/ui.js';
 import { buildWorld } from './world.js';
 import { Fighters, FL } from './fighters.js';
 import { Fx } from './fx.js';
+import { Hud } from './hud.js';
 
 const BK = window.BK;
 const DELAY = .1;    // others are drawn this far behind the round clock
@@ -25,7 +27,7 @@ const GHOST_KEYS = new Set(['KeyJ', 'KeyK', 'Space']);
 const r2 = v => Math.round(v * 100) / 100;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
-let ctx = null, L = null, world = null, fighters = null, fx = null, offFrame = null, reticle = null;
+let ctx = null, L = null, hud = null, world = null, fighters = null, fx = null, offFrame = null, reticle = null;
 let rd = 0, buildRd = 0, building = null, queue = [], buildId = 0; // buildId: bumped by every new round and by unmount so stale async work bails out
 let clock = 0, lastC = 0, ph = '', ended = false;
 let camSnap = true;
@@ -37,6 +39,13 @@ const later = [];         // [{ t, fn }] effects delayed to line up with the int
 const watches = [];       // bonks in progress on other screens: [{ id, c, t, hit }]
 const airborne = new Map();
 const unknown = new Set(); // ids built before the lobby knew their name / avatar
+// HUD data
+let roster = [];           // this round's players: [{ id, name, me }] (names are refreshed from the lobby)
+let roundOf = 0;
+let breaks = [];           // [[q, r, warnAt, dropAt], ...] from `round`
+const kos = new Map();     // id -> knock-outs this round, counted from `out` messages (roundEnd rows replace them)
+const warned = new Set();  // warnAt values already announced in the feed
+const lastOn = new Map();  // id -> [x, z]: where each body last stood on the ground (a tile that has dropped since = sank with the edge)
 const camT = new THREE.Vector3(), camP = new THREE.Vector3(), tv = new THREE.Vector3();
 
 // ---- your own animal ----
@@ -58,6 +67,9 @@ const on = (el, ev, fn, o) => { el.addEventListener(ev, fn, o); listeners.push([
 export async function mount(c) {
   ctx = c;
   L = ctx.ui.layer('bk-game');
+  hud = new Hud(L, { isTouch: ctx.engine.isTouch, onPress: press, onRelease: release, onMove: setMove });
+  hud.idle(true);
+  ctx.ui.emoteControl(L, e => ctx.net.send({ t: 'emote', e }));
   on(window, 'keydown', onKeyDown);
   on(window, 'keyup', onKeyUp);
   on(window, 'blur', releaseAll);
@@ -71,8 +83,9 @@ export function unmount() {
   for (const [el, ev, fn, o] of listeners) el.removeEventListener(ev, fn, o);
   listeners.length = 0;
   teardownRound();
+  if (hud) hud.destroy();
   if (L) L.remove();
-  L = offFrame = null; building = null; queue = []; rd = buildRd = 0; ph = '';
+  hud = L = offFrame = null; roster = []; breaks = []; building = null; queue = []; rd = buildRd = 0; ph = '';
   keys.clear(); move.x = move.z = 0;
 }
 
@@ -202,6 +215,8 @@ function install(d, w, fs, players) {
   reticle = makeReticle(); world.scene.add(reticle);
   rd = d.rd; ph = d.c < 0 ? 'count' : 'play'; ended = false;
   syncClock(d.c, true);
+  roundOf = d.of | 0; breaks = Array.isArray(d.breaks) ? d.breaks : [];
+  roster = players.map(p => ({ id: p.id, name: p.name, me: p.me }));
   myId = ctx.net.myId;
   for (const p of players) {
     const [x, z, f] = d.spawn[p.id];
@@ -222,7 +237,7 @@ function teardownRound() {
   if (reticle) { reticle.removeFromParent(); reticle.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); reticle.userData.mat.dispose(); }
   if (world) world.dispose();
   world = fighters = fx = reticle = null;
-  bufs.clear(); sunk.clear(); pend.clear(); airborne.clear(); unknown.clear();
+  bufs.clear(); sunk.clear(); pend.clear(); airborne.clear(); unknown.clear(); kos.clear(); warned.clear(); lastOn.clear();
   outOrder.length = later.length = watches.length = 0;
   me = null; cur = null; fellSent = false; sync = ''; away = false; others = [];
   nextStAt = 0;
@@ -270,7 +285,8 @@ function handle(d) {
     case 'fx': onFx(d); break;
     case 'knock': onKnock(d); break;
     case 'fix': onFix(d); break;
-    case 'roundEnd': case 'final': ended = true; break;
+    case 'roundEnd': for (const r of d.rows || []) kos.set(r.id, r.ko | 0); ended = true; break; // the server's counts win
+    case 'final': ended = true; break;
   }
 }
 
@@ -312,10 +328,64 @@ function mySnap(x, z, y, f, fl, gh) {
 }
 
 function onOut(d) {
+  const first = !outOrder.includes(d.id);
+  if (first) { outFeed(d); outSound(d); }
   if (!outOrder.includes(d.id)) outOrder.push(d.id);
   if (d.id === myId && me) { me.falling = true; cur = null; sync = ''; }
   sink(d.id);
   const p = pend.get(d.id); if (p) p.ok = true;
+}
+
+// ---- HUD data ----
+const ME_COL = '#e0a400', FEED_VERB = { bonk: 'bonked', push: 'pushed', dash: 'rammed', bump: 'knocked' };
+const lobbyOf = id => ctx.app.lobby && ctx.app.lobby.players.find(p => p.id === id);
+const nameOf = id => { const p = lobbyOf(id), r = roster.find(x => x.id === id); return p ? p.name : r ? r.name : 'Player'; };
+// Names in the feed: the one you are gets "You" / "you" in gold; the rest wear their colour.
+const nm = (id, low) => `<b style="font-weight:400;color:${id === myId ? ME_COL : ctx.app.colorOf(id)}">${id === myId ? (low ? 'you' : 'You') : esc(nameOf(id))}</b>`;
+
+function outFeed(d) {
+  if (d.by && d.by !== d.id) {
+    kos.set(d.by, (kos.get(d.by) || 0) + 1);
+    if (d.a === 'nut') hud.feed(`${d.by === myId ? 'Your' : nm(d.by) + "'s"} coconut got ${nm(d.id, true)}!`);
+    else hud.feed(`${nm(d.by)} ${FEED_VERB[d.a] || 'knocked'} ${nm(d.id, true)} into the sea!`);
+    return;
+  }
+  const at = lastOn.get(d.id), sank = at && world.solidAt(at[0], at[1], clock) < 0;
+  hud.feed(sank ? `${nm(d.id)} sank with the edge!` : `${nm(d.id)} slipped off the edge!`);
+}
+
+function outSound(d) {
+  const { sfx } = ctx, p = lobbyOf(d.id), a = window.ANIMALS && window.ANIMALS[p ? p.av | 0 : 0];
+  sfx.animal(a ? a.id : '');
+  if (d.id === myId) sfx.lose();
+}
+
+// Every frame: roster, top chips, buttons.
+function hudFrame() {
+  const st = status();
+  hud.idle(st.mode === 'none');
+  hud.ghost(st.mode === 'ghost' || st.mode === 'out');
+  hud.cooldown('push', st.push / BK.CD.push);
+  hud.cooldown('dash', st.dash / BK.CD.dash);
+  hud.cooldown('bonk', st.bonk / BK.CD.bonk);
+  hud.cooldown('nut', st.nut / (BK.CD.nut + NUT_SLACK));
+  hud.charge(st.charge);
+  const rows = roster.map(r => ({ id: r.id, name: nameOf(r.id), color: ctx.app.colorOf(r.id), ko: kos.get(r.id) || 0, out: sunk.has(r.id) || outOrder.includes(r.id) }));
+  // the edge: the next warn still to come, "cracking" while a break is in its warn window, "last stand" once all have dropped
+  let next = Infinity, warn = false, left = 0;
+  for (const [, , w, dr] of breaks) {
+    if (clock >= dr) continue;
+    left++;
+    if (clock >= w) warn = true; else next = Math.min(next, w);
+    if (clock >= w && !warned.has(w)) { warned.add(w); if (clock - w < 1.5) { hud.feed('The edge is cracking!', '#ffe1dd'); ctx.sfx.oops(); } }
+  }
+  const secs = Math.ceil(Math.max(0, next - clock)), last = !left;
+  hud.top({
+    rd, of: roundOf, alive: rows.filter(r => !r.out).length, total: rows.length, hot: warn,
+    label: last ? 'Last stand!' : warn ? 'Edge is' : 'Edge breaks in',
+    value: last ? '' : warn ? 'cracking!' : !Number.isFinite(next) ? '' : `${secs / 60 | 0}:${String(secs % 60).padStart(2, '0')}`,
+  });
+  hud.roster(rows);
 }
 
 // The body hits the water: seen falling through the surface, or the server said `out` first.
@@ -326,6 +396,7 @@ function sink(id) {
   if (F && F.state === 'alive') {
     fx.splash(F.x, F.z, 1);
     fx.pop(F.x, BK.WATER_Y + .8, F.z, 'SPLASH!', 34, '#bfe6ff');
+    ctx.sfx.splash();
     fighters.out(id);
   }
   pend.set(id, { t: GHOST_T, ok: outOrder.includes(id) });
@@ -362,6 +433,7 @@ function onKnock(d) {
   const dx = power > 1e-6 ? vx / power : 0, dz = power > 1e-6 ? vz / power : 0;
   BK.applyKnock(me, dx, dz, { power, vy: Number.isFinite(d.vy) ? d.vy : 0, stun: Number.isFinite(d.stun) ? d.stun : 0 });
   cur = null; knockAt = performance.now(); away = false;
+  if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) try { navigator.vibrate(d.a === 'bonk' ? 60 : 25); } catch {}
   if (d.a === 'push') { fx.pop(me.x, 1.2, me.z, 'Push!', 22, '#bfe6ff'); fx.stars(me.x, .7, me.z, 4, .6); }
   else if (d.a === 'bonk') bonkFx(me.x, me.z, Math.max(0, Math.min(1, (power - BK.BONK.power[0]) / BK.BONK.power[1])));
   else if (d.a === 'dash' || d.a === 'bump') fx.stars(me.x, .7, me.z, 4, .6);
@@ -401,6 +473,7 @@ function doPush() {
     any = true;
   }
   if (any) fx.hitstop(60);
+  ctx.sfx.beep(any ? 380 : 520, .07, 'triangle', .07, -140);
 }
 
 function bonkStart() {
@@ -417,6 +490,7 @@ function bonkRelease() {
   sendSt(true);
   send({ t: 'act', a: 'bonk', q, c: cc });
   cur = { a: 'bonk', q, c: cc, done: new Set() };
+  ctx.sfx.beep(240, .1, 'sawtooth', .05, 160);
 }
 
 function doDash() {
@@ -428,6 +502,7 @@ function doDash() {
   send({ t: 'act', a: 'dash', q, c: 0 });
   cur = { a: 'dash', q, c: 0, done: new Set() };
   fx.dust(me.x, me.z, 6);
+  ctx.sfx.beep(700, .1, 'sine', .05, 500);
 }
 
 function doNut() {
@@ -435,6 +510,7 @@ function doNut() {
   if (myMode() !== 'ghost' || ended || ph !== 'play' || now < cdUntil.nut) return;
   cdUntil.nut = now + (BK.CD.nut + NUT_SLACK) * 1000;
   send({ t: 'nut', x: r2(ret.x), z: r2(ret.z) });
+  ctx.sfx.beep(900, .12, 'sine', .05, -300);
 }
 
 function bonkFx(x, z, c) {
@@ -442,6 +518,7 @@ function bonkFx(x, z, c) {
   fx.pop(x, 1.3, z, mega ? 'MEGA BONK!' : 'BONK!', 30 + c * 22, mega ? '#ff5d6c' : '#ffd23f');
   fx.stars(x, .8, z, 6 + (c * 8 | 0), 1 + c);
   fx.shake(.15 + c * .35);
+  ctx.sfx.beep(170 - c * 50, .14, 'square', .1, -90);
 }
 
 // While our bonk lunges or our dash runs: every body it reaches on this screen is hit, once.
@@ -482,6 +559,7 @@ function stepMe(dt) {
   if ((ev === 'fall' || me.falling) && !fellSent) {
     fellSent = true; cur = null; me.charging = false; me.charge = 0;
     send({ t: 'fall' });
+    ctx.sfx.beep(760, .35, 'sine', .05, -520);
   }
 }
 
@@ -537,7 +615,7 @@ function frame(dt, t) {
     const [x, z, y, f, fl, ch] = s;
     fighters.set(id, { x, z, y, f, fl, ch, ground: world.solidAt(x, z) >= 0 }, ddt, t);
     if ((fl & FL.FALL) && y < BK.WATER_Y + .05) { sink(id); continue; }
-    if (!(fl & FL.FALL)) { ax += x; az += z; an++; others.push({ id, x, z, y, f }); }
+    if (!(fl & FL.FALL)) { ax += x; az += z; an++; others.push({ id, x, z, y, f }); if (y < .05) lastOn.set(id, [x, z]); }
     bodyDust(id, x, z, y, fl);
   }
   // our own animal, simulated here (held still until the server's word after a new round or a hidden tab)
@@ -548,13 +626,14 @@ function frame(dt, t) {
     fighters.set(myId, { x: me.x, z: me.z, y: me.y, f: me.f, fl, ch: me.charging ? me.charge : 0, ground: groundAt(me.x, me.z) >= 0 }, ddt, t);
     if (me.falling && me.y < BK.WATER_Y + .05) sink(myId);
     else {
-      if (!me.falling) { ax += me.x; az += me.z; an++; }
+      if (!me.falling) { ax += me.x; az += me.z; an++; if (me.y < .05) lastOn.set(myId, [me.x, me.z]); }
       bodyDust(myId, me.x, me.z, me.y, fl);
       if (!sync) sendSt(false);
     }
   } else if (mine) fighters.set(myId, null, ddt, t);
   for (const [id, p] of pend) if ((p.t -= dt) <= 0 && p.ok) seat(id);
   stepWatches(dt);
+  hudFrame();
   // ghost: aim the reticle (NUT.aim m/s, inside the island) and drop coconuts on it
   reticle.visible = myMode() === 'ghost' && !ended;
   if (reticle.visible) {

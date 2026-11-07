@@ -4,3 +4,83 @@
 @keyframes bk-pop{0%{transform:translate(-50%,-50%) scale(.3) rotate(-12deg);opacity:1}22%{transform:translate(-50%,-75%) scale(1.15) rotate(4deg);opacity:1}100%{transform:translate(-50%,-150%) scale(1) rotate(0);opacity:0}}
 .bk-tag{font-size:14px;padding:1px 9px 3px}
 .bk-tag.bk-me{color:var(--ink);text-shadow:none}
+
+/* HUD (spec §5.2, from the approved mockup). Everything lives inside the .bk-game layer. */
+.bk-game .bk-top,.bk-game .bk-top *,.bk-game .bk-roster,.bk-game .bk-roster *,.bk-game .bk-feed,.bk-game .bk-feed *,.bk-game .bk-ghostbar,.bk-game .bk-ghostbar *,.bk-game .bk-hint,.bk-game .bk-hint *,.bk-game .bk-acts{pointer-events:none!important}
+.bk-game .bk-ab{pointer-events:auto!important}
+.bk-top{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:12px}
+.bk-lv{font-size:13px;padding:4px 12px 6px;text-align:center;line-height:1;color:#6a7690}
+.bk-lv b{display:block;font-weight:400;font-size:24px;color:var(--ink);white-space:nowrap}
+.bk-brk{display:flex;align-items:center;gap:8px;padding:6px 14px 8px;font-size:15px;line-height:1;white-space:nowrap}
+.bk-brk svg{width:26px;height:26px;flex:none}
+.bk-brk b{font-weight:400;font-size:24px;min-width:48px}
+.bk-brk b:empty{display:none}
+.bk-brk.bk-hot{background:#ff5d6c;color:#fff;animation:bk-shake .25s infinite}
+.bk-brk.bk-hot svg path{stroke:#fff}
+@keyframes bk-shake{25%{transform:translate(-2px,1px)}75%{transform:translate(2px,-1px)}}
+.bk-roster{position:absolute;top:14px;left:14px;display:flex;flex-direction:column;gap:9px}
+.bk-rs{display:flex;align-items:center;gap:7px;padding:2px 10px 4px 4px;font-size:15px;border-radius:13px;transition:opacity .3s}
+.bk-rs i{width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 3px var(--ink);flex:none}
+.bk-rs em{font-style:normal;font-size:12px;background:#ffd23f;border-radius:7px;padding:0 5px 1px;box-shadow:0 0 0 2px var(--ink)}
+.bk-rs em:empty{display:none}
+.bk-rs.bk-out{opacity:.55}.bk-rs.bk-out span{text-decoration:line-through;text-decoration-thickness:3px}
+.bk-feed{position:absolute;left:50%;top:92px;transition:top .2s;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;align-items:center}
+.bk-feed div{font-size:17px;padding:4px 14px 6px;animation:bk-fin .3s ease-out;white-space:nowrap}
+@keyframes bk-fin{from{transform:translateY(-12px);opacity:0}}
+.bk-ghostbar{position:absolute;left:50%;top:84px;transform:translateX(-50%);display:none;align-items:center;gap:10px;padding:8px 18px 10px;border-radius:18px;background:#9a7cff;font-size:20px;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 5px 0 var(--ink),0 0 0 4px var(--ink);text-shadow:0 2px 0 rgba(20,30,50,.35);white-space:nowrap}
+.bk-ghost .bk-ghostbar{display:flex}.bk-ghost .bk-feed{top:146px}
+.bk-ghostbar small{font-size:14px;opacity:.9}
+
+.bk-hint{position:absolute;left:14px;bottom:16px;font-size:14px;padding:6px 12px 8px;display:flex;gap:10px;align-items:center}
+.bk-hint kbd{font-family:inherit;background:#ffd23f;border-radius:7px;padding:0 6px 1px;box-shadow:0 0 0 2px var(--ink)}
+.bk-touch .bk-hint,.bk-idle .bk-hint{display:none}
+.bk-hint .bk-f,.bk-hint .bk-g{display:flex;gap:10px}.bk-hint .bk-g{display:none}.bk-ghost .bk-hint .bk-f{display:none}.bk-ghost .bk-hint .bk-g{display:flex}
+.bk-acts{position:absolute;right:20px;bottom:20px;width:236px;height:206px}
+.bk-ab{position:absolute;border:0;border-radius:50%;font:inherit;color:#fff;font-size:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-shadow:0 2px 0 rgba(20,30,50,.35);box-shadow:inset 0 -6px 0 rgba(0,0,0,.18),inset 0 3px 0 rgba(255,255,255,.35),0 6px 0 var(--ink),0 0 0 4px var(--ink);transition:transform .07s;touch-action:none;-webkit-user-select:none;user-select:none;padding:0}
+.bk-ab svg.i{width:34px;height:34px;position:relative}
+.bk-ab span{position:relative}
+.bk-ab kbd{position:absolute;top:-9px;right:-6px;font-family:inherit;font-size:12px;background:#fff;color:var(--ink);border-radius:8px;padding:0 6px;box-shadow:0 0 0 3px var(--ink);text-shadow:none;z-index:2}
+.bk-touch .bk-ab kbd{display:none}
+.bk-ab:active,.bk-ab.bk-down{transform:translateY(4px);box-shadow:inset 0 -4px 0 rgba(0,0,0,.18),0 2px 0 var(--ink),0 0 0 4px var(--ink)}
+.bk-ab .bk-cd{position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(36,48,74,.55) calc(var(--p,0)*1%),transparent 0);pointer-events:none}
+.bk-ab.bk-bonk{right:0;bottom:0;width:116px;height:116px;background:#ff5d6c;font-size:17px}
+.bk-ab.bk-bonk svg.i{width:46px;height:46px}
+.bk-ab.bk-push{right:130px;bottom:6px;width:84px;height:84px;background:#4fb4ff}
+.bk-ab.bk-dash{right:30px;bottom:132px;width:74px;height:74px;background:#55d36b;font-size:13px}
+.bk-ab.bk-dash svg.i{width:28px;height:28px}
+.bk-ab.bk-nut{right:0;bottom:0;width:116px;height:116px;background:#c0814f;font-size:16px;display:none}
+.bk-ab.bk-nut svg.i{width:46px;height:46px}
+.bk-ghost .bk-ab.bk-bonk,.bk-ghost .bk-ab.bk-push,.bk-ghost .bk-ab.bk-dash{display:none}.bk-ghost .bk-ab.bk-nut{display:flex}
+.bk-idle .bk-acts,.bk-idle .bk-joy{display:none!important}
+.bk-charge{position:absolute;inset:-12px;width:calc(100% + 24px);height:calc(100% + 24px);transform:rotate(-90deg);pointer-events:none}
+.bk-charge circle{fill:none;stroke-width:8;stroke-linecap:round}
+.bk-joy{position:absolute;left:0;bottom:0;width:46%;height:55%;display:none;touch-action:none}
+.bk-touch .bk-joy{display:block}
+.bk-joy .bk-base{position:absolute;width:132px;height:132px;margin:-66px;border-radius:50%;background:rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(36,48,74,.5);left:110px;top:calc(100% - 120px);pointer-events:none}
+.bk-joy .bk-knob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px var(--ink),0 5px 0 var(--ink)}
+
+/* emote button: top right (the action buttons own the bottom right) */
+.bk-game .emote-btn{right:14px;top:14px;bottom:auto}
+.bk-game .emote-panel{right:14px;top:80px;bottom:auto}
+
+@media (max-width:760px){
+  .bk-top{gap:7px;top:10px}.bk-lv{font-size:10px;padding:3px 8px 5px}.bk-lv b{font-size:17px}
+  .bk-brk{font-size:11px;padding:4px 9px 6px;gap:5px}.bk-brk b{font-size:17px;min-width:36px}.bk-brk svg{width:18px;height:18px}.bk-brk span{display:none}
+  .bk-roster{top:74px;left:10px;gap:7px}.bk-rs{font-size:0;padding:2px;gap:0}.bk-rs i{width:18px;height:18px}.bk-rs em{display:none}
+  .bk-feed{top:124px}.bk-feed div{font-size:13px}
+  .bk-acts{transform:scale(.82);transform-origin:100% 100%;right:14px;bottom:14px}
+  .bk-ghostbar{font-size:14px;top:124px}.bk-ghost .bk-feed{top:168px}
+  .bk-game .emote-btn{right:10px;top:10px;width:44px;height:44px}.bk-game .emote-panel{right:10px;top:70px}
+}
+@media (max-height:500px) and (min-width:761px){ /* phone held sideways */
+  .bk-top{top:8px;gap:7px}.bk-lv{font-size:10px;padding:3px 8px 5px}.bk-lv b{font-size:17px}
+  .bk-brk{font-size:11px;padding:4px 9px 6px;gap:5px}.bk-brk b{font-size:17px;min-width:36px}.bk-brk svg{width:18px;height:18px}
+  .bk-roster{top:10px;left:10px;gap:7px}.bk-rs{font-size:12px;padding:1px 8px 3px 3px}.bk-rs i{width:16px;height:16px}.bk-rs em{font-size:10px}
+  .bk-feed{top:62px;gap:5px}.bk-feed div{font-size:13px;padding:2px 12px 4px}
+  .bk-acts{transform:scale(.66);transform-origin:100% 100%;right:12px;bottom:10px}
+  .bk-hint{font-size:11px;bottom:10px}
+  .bk-ghostbar{font-size:14px;top:62px;padding:4px 14px 6px}.bk-ghost .bk-feed{top:100px}
+  .bk-game .emote-btn{right:10px;top:10px;width:44px;height:44px}.bk-game .emote-panel{right:10px;top:62px}
+}
+/* 9 to 12 players: colour dots only wherever the list would run into the corner controls */
+@media (max-height:640px){.bk-roster.bk-dense{gap:6px}.bk-dense .bk-rs{font-size:0;padding:2px;gap:0}.bk-dense .bk-rs i{width:16px;height:16px}.bk-dense .bk-rs em{display:none}}
