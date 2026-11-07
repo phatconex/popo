@@ -80,7 +80,7 @@
 - `mapPicker(setting, rand) -> (roundIndex) => 'beach' | 'snow' | 'farm'`.
 - `tileState(brk, c) -> 'ok' | 'warn' | 'drop'` (`c < warnAt` ok, `< dropAt` warn, else drop).
 
-Rules: obstacles = a random ring-2 tile and its opposite `(-q, -r)`. Spawns evenly on radius `.6·islandRadius(rings)`, facing the centre; rotate the start angle in steps of 0.1 rad until every spawn is ≥ 1 m from both obstacle centres. Snow: `round(.4·tiles)` ice tiles grown from 3–5 random non-centre seeds by random neighbour expansion; centre is never ice. Farm: mud count 4 / 6 / 8 for rings 3 / 4 / 5, never outer ring, centre or obstacle tiles. Breaks: for ring = rings down to 2, two halves per ring (first half = contiguous arc of `ceil(len/2)` tiles by angle from a random start angle), break `k` has `warnAt = first + k·every`, `dropAt = warnAt + warn`; then the 6 ring-1 tiles one at a time: first `warnAt = lastHalfDrop + hold`, then `+ single` each. The centre never breaks. Random map: shuffle the 3 maps, cycle, reshuffle each cycle so the first of a new cycle differs from the last of the previous.
+Rules: obstacles = a random ring-2 tile and its opposite `(-q, -r)`. Spawns evenly on radius `.6·islandRadius(rings)`, facing the centre; rotate the start angle in steps of 0.1 rad until every spawn is ≥ 1 m from both obstacle centres. Snow: `round(.4·tiles)` ice tiles grown from 3–5 random non-centre seeds by random neighbour expansion; centre is never ice. Farm: mud count 4 / 6 / 8 for rings 3 / 4 / 5, never outer ring, centre or obstacle tiles. Breaks: for ring = rings down to 2, two halves per ring (first half = contiguous arc of `ceil(len/2)` tiles by angle from a random start angle), break `k` has `warnAt = first + k·every`, `dropAt = warnAt + warn`; then the 6 ring-1 tiles one at a time: first `warnAt = lastHalfDrop + hold`, then `+ single` each. The centre never breaks. Random map: one random permutation of the 3 maps picked when the picker is created, returned as `perm[roundIndex % 3]` (any 3 consecutive rounds cover all maps, spec §2.2; ledger Ruling 7).
 
 - [ ] **Step 1: Failing tests** in `test/bonk-island.test.js` with a seeded `rand` (e.g. mulberry32):
   - tile counts 37 / 61 / 91 for n = 3 / 6 / 10; `ringsFor` boundaries (4→3, 5→4, 8→4, 9→5, 12→5).
@@ -88,7 +88,7 @@ Rules: obstacles = a random ring-2 tile and its opposite `(-q, -r)`. Spawns even
   - rings 3 last single `warnAt` 94; rings 5 last single 142.
   - snow ice ratio in [.35, .45] of tiles, centre not ice; farm mud count 4/6/8, none on outer ring, centre or obstacles; beach has no `surf`.
   - spawn: n entries, all on tiles with `tileState === 'ok'` at c=0, ≥ 1 m from obstacles, pairwise ≥ 1 m apart, facing within .01 rad of the centre direction.
-  - `mapPicker('random')` over 3 rounds yields all 3 maps, over 30 rounds never repeats back-to-back; `mapPicker('snow')` always snow.
+  - `mapPicker('random')`: every sliding window of 3 over rounds 0..29 has all 3 maps; same index gives the same map; `mapPicker('snow')` always snow.
   - `FAST_T` schedule for rings 3 ends before c = 30.
 - [ ] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** `npm test` → pass.
 - [ ] **Step 5:** Commit `feat(bonk): island layout, surfaces and break schedule`.
@@ -98,6 +98,7 @@ Rules: obstacles = a random ring-2 tile and its opposite `(-q, -r)`. Spawns even
 **Files:** Create `server/games/bonk/index.js`; Test `test/bonk.test.js`
 
 **Interfaces — Consumes:** Task 1 `BK.*`, Task 2 `makeIsland`, `mapPicker`, `tileState`, `T`, `FAST_T`. **Produces:**
+- In `shared.js` (ledger Ruling 8, obstacle collision was unassigned): `BK.OBST_R = .38`, `BK.hitObstacles(b, centres)` — push `b` out of each circle of radius `OBST_R + BODY_R`; if it was moving inward, remove 1.5 × the inward normal speed (mockup behaviour). Test in `test/bonk-shared.test.js`. Server sim, bots and the client call it with the centres of obstacle tiles not in state `drop`.
 - `meta = { id:'bonk', name:'Bonk Island', desc:'Shove your friends into the sea. Last paw standing wins!', min:2, max:12, tag:'Brawl', settings:[ {key:'map', label:'Map', def:'random', options:[random 'Random', beach 'Beach', snow 'Snow', farm 'Farm']}, {key:'rounds', label:'Rounds', def:'5', options:['3','5','7'] (labels same)} ] }`.
 - `module.exports = { meta, create: api => new Bonk(api), _test: { T, FAST_T } }`. Timings `T`/`FAST_T` chosen by `process.env.BK_FAST === '1'` at load.
 - Per-player record `g`: `{ id, name, av, body, out, ghost, place, ko, got, total, online, lastSt (server clock of last accepted st), hist: [[c,x,z]] (0.5 s), offGround (s), fallT, acts: {push|bonk|dash: {q, at}}, hits: Set of "q:id", lastHit: {by, a, at} , nutAt, knockV }`.
