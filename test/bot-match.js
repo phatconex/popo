@@ -5,6 +5,7 @@
 //   Bonk Island:  BK_FAST=1 PORT=3101 node server/index.js  &&  node test/bot-match.js --bonk 3101 4   (3 rounds, prints places, OK)
 //                 (add NET_LAG_MS=250 to the server to check play under latency)
 //   Bonk join:    node test/bot-match.js --bonk-join ABCD 3000 3   (bots join a human's room and play until Ctrl+C)
+//   Bonk host:    node test/bot-match.js --bonk-host 3000 3 [map] [rounds]   (bots open a room; it starts when you press Ready)
 const WebSocket = require('ws');
 const BK = require('../public/games/bonk3d/shared.js');
 const args = process.argv.slice(2);
@@ -333,8 +334,36 @@ async function bonkJoin(code, port, n) {
   console.log(`${n} bots playing Bonk Island in ${code}. Ctrl+C to stop.`);
 }
 
+// A bot opens a Bonk Island room and starts each match once every human in it is Ready:
+//   node test/bot-match.js --bonk-host 3000 3 [map] [rounds]
+async function bonkHost(port, n, map = 'random', rounds = '3') {
+  const bots = [];
+  for (let i = 0; i < n; i++) {
+    const b = bot(port, 'Bot ' + (i + 1), (i * 7 + 3) % 24); await b.open;
+    if (i === 0) b.send({ t: 'join', name: b.name, av: b.av, game: 'bonk' });
+    else b.send({ t: 'join', name: b.name, av: b.av, code: bots[0].code });
+    const j = await until(b, m => m.t === 'joined');
+    b.id = j.id; b.code = j.code;
+    if (i === 0) b.send({ t: 'settings', settings: { map, rounds } });
+    b.send({ t: 'profile', ready: true });
+    b.on(m => { if (m.t === 'lobby' && m.state === 'lobby' && m.players.some(p => p.id === b.id && !p.ready)) b.send({ t: 'profile', ready: true }); });
+    bonkBot(b, b.id);
+    bots.push(b);
+  }
+  const host = bots[0], botIds = new Set(bots.map(b => b.id));
+  let starting = false;
+  host.on(m => {
+    if (m.t !== 'lobby') return;
+    if (m.state !== 'lobby') { starting = false; return; }
+    const humans = m.players.filter(p => !botIds.has(p.id) && p.on !== false);
+    if (!starting && humans.length && humans.every(p => p.ready)) { starting = true; setTimeout(() => host.send({ t: 'start' }), 800); }
+  });
+  console.log(`room ${host.code}: http://localhost:${port}/?room=${host.code}  (press Ready to start; Ctrl+C to stop)`);
+}
+
 if (args[0] === '--bonk') bonkMatch(+args[1] || 3101, +args[2] || 4).catch(e => { console.error('FAIL', e.message); process.exit(1); });
 else if (args[0] === '--bonk-join') bonkJoin(args[1], +args[2] || 3000, +args[3] || 3);
+else if (args[0] === '--bonk-host') bonkHost(+args[1] || 3000, Math.max(1, Math.min(11, +args[2] || 3)), args[3], args[4]);
 else if (args[0] === '--host') hostPlay(+args[1] || 3000, +args[2] || 1, args[3]);
 else if (args[0] === '--join') joinPlay(args[1], +args[2] || 3000, +args[3] || 3);
 else if (args[0] === '--lobby') lobbyOnly(args[1], +args[2] || 3000, +args[3] || 11);
