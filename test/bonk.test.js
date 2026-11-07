@@ -528,3 +528,14 @@ test('per-round combat state is reset', () => {
   assert.deepStrictEqual([Object.keys(a.acts).length, a.hits.size, a.lastHit, a.nutAt], [0, 0, null, -Infinity]);
   assert.strictEqual(ofType(api, 'round').length, 2);
 });
+
+test('act fx carries the bonk charge clamped to 0..1, and 0 for push and dash', () => {
+  const { api, g } = duel();
+  const fxc = () => ofType(api, 'fx').at(-1);
+  act(g, 1, { a: 'bonk', q: 1, c: .8 }); assert.strictEqual(fxc().c, .8);
+  tick(g, 1.2); act(g, 1, { a: 'bonk', q: 2, c: 5 }); assert.strictEqual(fxc().c, 1);
+  tick(g, 1.2); act(g, 1, { a: 'bonk', q: 3, c: NaN }); assert.strictEqual(fxc().c, 0);
+  tick(g, 1.2); act(g, 1, { a: 'push', q: 4, c: .7 }); assert.strictEqual(fxc().c, 0);
+  assert.strictEqual(fxc().rd, 1);
+  act(g, 1, { a: 'dash', q: 5, c: .7 }); assert.strictEqual(fxc().c, 0);
+});

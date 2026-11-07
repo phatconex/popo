@@ -266,8 +266,8 @@ class Bonk {
     const prev = g.acts[d.a];
     if (prev && this.t < prev.at + BK.CD[d.a] - CD_SLACK) return;
     g.acts[d.a] = { q: d.q, at: this.t };
-    const b = g.body;
-    this.api.bcast({ t: 'fx', rd: this.rd, a: d.a, id: g.id, x: r2(b.x), z: r2(b.z), c: r2(this.c) });
+    const b = g.body, charge = d.a === 'bonk' && Number.isFinite(d.c) ? Math.max(0, Math.min(1, d.c)) : 0;
+    this.api.bcast({ t: 'fx', rd: this.rd, a: d.a, id: g.id, x: r2(b.x), z: r2(b.z), c: charge });
   }
 
   onHit(g, d) {
