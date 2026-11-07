@@ -1,0 +1,261 @@
+'use strict';
+// Bonk Island server: round flow, movement checks, falls, scoring, disconnects.
+// Message formats: docs/superpowers/specs/2026-11-07-bonk-island-design.md section 4.2.
+// Clocks: `this.c` is the round clock (c = 0 is "BONK!", negative while counting down, drives the break
+// schedule); `this.t` is a monotone server clock used for lastSt, hist and lastHit.at (so they survive rounds).
+const BK = require('../../../public/games/bonk3d/shared.js');
+const { T, FAST_T, makeIsland, mapPicker, tileState } = require('./island.js');
+
+const TT = process.env.BK_FAST === '1' ? FAST_T : T;
+
+const meta = {
+  id: 'bonk',
+  name: 'Bonk Island',
+  desc: 'Shove your friends into the sea. Last paw standing wins!',
+  min: 2, max: 12, tag: 'Brawl',
+  settings: [
+    { key: 'map', label: 'Map', def: 'random', options: [{ v: 'random', label: 'Random' }, { v: 'beach', label: 'Beach' }, { v: 'snow', label: 'Snow' }, { v: 'farm', label: 'Farm' }] },
+    { key: 'rounds', label: 'Rounds', def: '5', options: [{ v: '3', label: '3' }, { v: '5', label: '5' }, { v: '7', label: '7' }] },
+  ],
+};
+
+const POINTS = [5, 3, 2, 1];   // by place, 0 after
+const SILENT = 1;              // s without an accepted st before the server simulates the body
+const OFF_GROUND = .5;         // s standing off a solid tile before the server calls it a fall
+const FALL_OUT = .6;           // s from falling to out
+const HIST = .5;               // s of position history kept
+const ST_DT = .05;             // dt used to check the first st after the server simulated a body
+const MAX_ABS = 100;
+const MAPS = ['random', 'beach', 'snow', 'farm'];
+
+const r2 = (v) => Math.round(v * 100) / 100;
+const key = (q, r) => q + ',' + r;
+const num = (v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < MAX_ABS;
+
+class Bonk {
+  constructor(api) {
+    this.api = api;
+    this.rand = api.rand || Math.random;
+    const s = api.settings || {};
+    this.total = ['3', '5', '7'].includes(String(s.rounds)) ? +s.rounds : 5;
+    this.pickMap = mapPicker(MAPS.includes(s.map) ? s.map : 'random', this.rand);
+    this.gs = new Map();      // id -> player record
+    this.rd = 0;
+    this.c = 0;
+    this.t = 0;
+    this.phase = 'idle';      // count | play | pause | final | done
+    this.timer = 0;           // pause / final countdown
+    this.isl = null;
+    this.tiles = new Map();
+    this.brk = new Map();
+    this.roundMsg = null;
+    this.groundAt = (x, z) => this.ground(x, z);
+  }
+
+  // ---- helpers -------------------------------------------------------------------------------------------
+  ground(x, z) {
+    const [q, r] = BK.xzToHex(x, z), k = key(q, r), tile = this.tiles.get(k);
+    if (!tile) return -1;
+    const b = this.brk.get(k);
+    if (b && tileState(b, this.c) === 'drop') return -1;
+    return tile.surf;
+  }
+  centres() {
+    return this.isl.obst.filter(([q, r]) => {
+      const b = this.brk.get(key(q, r));
+      return !b || tileState(b, this.c) !== 'drop';
+    }).map(([q, r]) => BK.hexToXZ(q, r));
+  }
+  alive() { return [...this.gs.values()].filter((g) => !g.out); }
+  player(p) { return this.gs.get(p.id); }
+
+  // ---- flow ----------------------------------------------------------------------------------------------
+  start() {
+    for (const p of this.api.players()) {
+      this.gs.set(p.id, {
+        id: p.id, name: p.name, av: p.av, body: null, out: false, ghost: false, place: 0, ko: 0, got: 0, total: 0,
+        online: true, lastSt: 0, hist: [], offGround: 0, fallT: -1, acts: {}, hits: new Set(), lastHit: null,
+        nutAt: -Infinity, knockV: 0, simmed: false, stFl: 0, stCh: 0,
+      });
+    }
+    this.startRound();
+  }
+
+  startRound() {
+    this.rd++;
+    this.isl = makeIsland({ n: this.gs.size, map: this.pickMap(this.rd - 1), rand: this.rand, T: TT });
+    this.tiles = new Map(this.isl.tiles.map((t) => [key(t.q, t.r), t]));
+    this.brk = new Map(this.isl.breaks.map((b) => [key(b[0], b[1]), b]));
+    this.c = -TT.count;
+    this.phase = 'count';
+    const spawn = {};
+    let i = 0;
+    for (const g of this.gs.values()) {
+      const [x, z, f] = this.isl.spawn[i++];
+      spawn[g.id] = [r2(x), r2(z), r2(f)];
+      g.body = BK.newBody(x, z, f);
+      Object.assign(g, { out: false, ghost: false, place: 0, ko: 0, got: 0, hist: [], offGround: 0, fallT: -1, acts: {}, hits: new Set(), lastHit: null, nutAt: -Infinity, knockV: 0, simmed: false, stFl: 0, stCh: 0, lastSt: this.t });
+    }
+    const m = this.isl;
+    this.roundMsg = { t: 'round', rd: this.rd, of: this.total, map: m.map, rings: m.rings, obst: m.obst, surf: m.surf, breaks: m.breaks, spawn };
+    this.api.bcast({ ...this.roundMsg, c: this.c });
+  }
+
+  tick(dt) {
+    if (this.phase === 'done' || this.phase === 'idle') return;
+    this.t += dt;
+    if (this.phase === 'pause' || this.phase === 'final') {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        if (this.phase === 'pause') this.startRound();
+        else this.finish();
+      }
+      return;
+    }
+    this.c += dt;
+    if (this.phase === 'count' && this.c >= 0) this.phase = 'play';
+    const centres = this.centres();
+    for (const g of this.gs.values()) {
+      if (g.out) continue;
+      this.moveBody(g, dt, centres);
+      g.hist.push([this.t, g.body.x, g.body.z]);
+      while (g.hist.length && this.t - g.hist[0][0] > HIST) g.hist.shift();
+    }
+    for (const g of [...this.gs.values()]) {
+      if (g.out || g.fallT < 0) continue;
+      g.fallT += dt;
+      if (g.fallT >= FALL_OUT) this.eliminate(g);
+    }
+    this.snapshot();
+    if (this.phase === 'play') this.checkRoundEnd();
+  }
+
+  moveBody(g, dt, centres) {
+    const b = g.body;
+    if (this.phase === 'count' && g.online) g.lastSt = this.t; // nobody moves in the countdown: no silence yet
+    if (b.falling) { BK.step(b, { mx: 0, mz: 0 }, dt, this.groundAt); g.simmed = true; return; }
+    if (g.online && this.t - g.lastSt <= SILENT && !g.simmed) {
+      // owner drives this body: it is whatever the last accepted st said; the server only watches the ground
+      if (b.y <= 0 && this.groundAt(b.x, b.z) < 0) g.offGround += dt; else g.offGround = 0;
+      if (g.offGround > OFF_GROUND) this.markFall(g);
+      return;
+    }
+    g.simmed = true;
+    const ev = BK.step(b, { mx: 0, mz: 0 }, dt, this.groundAt);
+    if (ev === 'fall' || b.falling) { this.markFall(g); return; }
+    BK.hitObstacles(b, centres);
+  }
+
+  markFall(g) {
+    if (g.out || g.fallT >= 0) return;
+    g.body.falling = true;
+    g.fallT = 0;
+  }
+
+  // Out of the game for this round: place, KO credit, broadcast. Used by falls and by leaving.
+  eliminate(g) {
+    if (g.out) return;
+    const others = this.alive().filter((o) => o !== g).length;
+    g.out = true; g.ghost = true; g.fallT = -1; g.body.falling = true;
+    g.place = Math.max(2, others + 1); // nobody standing -> no place 1 (the survivor alone is placed at round end)
+    let by = 0, a = '';
+    const h = g.lastHit;
+    if (h && h.by !== g.id && this.t - h.at <= BK.KO_WINDOW) {
+      a = h.a;
+      const killer = this.gs.get(h.by);
+      if (killer) { killer.ko++; by = killer.id; }
+    }
+    this.api.bcast({ t: 'out', rd: this.rd, id: g.id, by, a, place: g.place });
+  }
+
+  checkRoundEnd() {
+    const left = this.alive();
+    if (left.length > 1 || left.some((g) => g.fallT >= 0)) return;
+    const survivor = left[0] || null;
+    if (survivor) survivor.place = 1;
+    const last = this.rd >= this.total;
+    for (const g of this.gs.values()) {
+      g.got = (POINTS[g.place - 1] || 0) + g.ko;
+      g.total += g.got;
+    }
+    const rows = [...this.gs.values()].sort((x, y) => x.place - y.place)
+      .map((g) => ({ id: g.id, place: g.place, ko: g.ko, got: g.got, total: g.total }));
+    this.api.bcast({ t: 'roundEnd', rd: this.rd, rows, win: survivor ? survivor.id : null, last });
+    if (!last) { this.phase = 'pause'; this.timer = TT.pause; return; }
+    this.api.bcast({ t: 'final', rd: this.rd, rows: this.finalRows() });
+    this.phase = 'final'; this.timer = TT.final;
+  }
+
+  finalRows() {
+    const sorted = [...this.gs.values()].sort((x, y) => y.total - x.total);
+    return sorted.map((g) => ({ id: g.id, total: g.total, rank: 1 + sorted.filter((o) => o.total > g.total).length }));
+  }
+
+  finish() {
+    if (this.phase === 'done') return;
+    this.phase = 'done';
+    const gs = [...this.gs.values()], top = Math.max(0, ...gs.map((g) => g.total));
+    this.api.end(top > 0 ? gs.filter((g) => g.total === top).map((g) => g.id) : []);
+  }
+
+  snapshot() {
+    const p = [];
+    for (const g of this.gs.values()) {
+      const b = g.body;
+      let fl, ch;
+      if (!g.out && !b.falling && !g.simmed) { fl = g.stFl; ch = g.stCh; }
+      else { fl = (b.stun > 0 ? 2 : 0) | (b.y > 0 || b.vy > 0 ? 16 : 0) | (b.falling ? 32 : 0); ch = 0; }
+      p.push([g.id, r2(b.x), r2(b.z), r2(b.y), r2(b.f), fl, ch, g.ghost ? 1 : 0]);
+    }
+    this.api.bcast({ t: 's', rd: this.rd, c: r2(this.c), ph: this.phase, p, nuts: [] });
+  }
+
+  // ---- messages ------------------------------------------------------------------------------------------
+  onMsg(p, d) {
+    const g = this.player(p);
+    if (!g || !d || typeof d !== 'object' || d.rd !== this.rd) return;
+    if (d.t === 'st') this.onSt(g, d);
+    else if (d.t === 'fall') { if (this.phase === 'play' && !g.out) this.markFall(g); }
+  }
+
+  fix(g) {
+    const b = g.body;
+    this.api.send(this.playerOf(g), { t: 'fix', rd: this.rd, x: r2(b.x), z: r2(b.z), y: r2(b.y), vx: r2(b.vx), vz: r2(b.vz), vy: r2(b.vy) });
+  }
+  playerOf(g) { return this.api.players().find((p) => p.id === g.id) || { id: g.id, ws: null }; }
+
+  onSt(g, d) {
+    if (g.out || g.body.falling || (this.phase !== 'count' && this.phase !== 'play')) return;
+    if (!['x', 'z', 'y', 'vx', 'vz', 'vy', 'f'].every((k) => num(d[k]))) return;
+    const b = g.body, dt = g.simmed ? ST_DT : Math.max(0, this.t - g.lastSt);
+    const limit = Math.max(10, Math.abs(g.knockV) || 0) * dt * 1.5 + .5;
+    if (Math.hypot(d.x - b.x, d.z - b.z) > limit) { this.fix(g); return; }
+    const fl = Number.isFinite(d.fl) ? Math.max(0, Math.min(63, d.fl | 0)) : 0;
+    const ch = Number.isFinite(d.ch) ? Math.max(0, Math.min(1, d.ch)) : 0;
+    Object.assign(b, { x: d.x, z: d.z, y: d.y, vx: d.vx, vz: d.vz, vy: d.vy, f: d.f, stun: fl & 2 ? .3 : 0 });
+    g.stFl = fl; g.stCh = ch; g.lastSt = this.t; g.simmed = false;
+  }
+
+  // ---- connection ----------------------------------------------------------------------------------------
+  onDisconnect(p) { const g = this.player(p); if (g) g.online = false; }
+
+  onRejoin(p) {
+    const g = this.player(p);
+    if (!g || this.phase === 'idle' || this.phase === 'done') return;
+    g.online = true; g.lastSt = this.t; g.simmed = true; // the next st is checked against the server body
+    this.api.send(p, { ...this.roundMsg, c: r2(this.c) });
+    this.fix(g);
+  }
+
+  onLeave(p) {
+    const g = this.player(p);
+    if (!g || this.phase === 'done') return;
+    if ((this.phase === 'count' || this.phase === 'play') && !g.out) this.eliminate(g);
+    this.gs.delete(g.id);
+    if (this.gs.size >= 2) return;
+    if (this.phase === 'final') this.finish();
+    else { this.phase = 'done'; this.api.end([]); }
+  }
+}
+
+module.exports = { meta, create: (api) => new Bonk(api), _test: { T, FAST_T } };
