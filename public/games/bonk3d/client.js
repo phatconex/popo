@@ -48,8 +48,6 @@ let sync = '';            // '' | 'snap': new round, wait for a snapshot | 'any'
 let away = false;         // the tab came back: our motion is from before the pause, which the server has played out since
 let hiddenAt = 0, knockAt = 0;
 let nextStAt = 0;         // performance.now() when the next st is due
-const sent = [];          // [[ms, x, z]] st sent in the last second (spots stale fixes)
-const skipped = [];       // ms of fixes skipped as stale in the last second
 const cdUntil = { push: 0, bonk: 0, dash: 0, nut: 0 }; // performance.now() when each action is ready again
 const ret = { x: 0, z: 0 };                         // ghost reticle
 const keys = new Set(), move = { x: 0, z: 0 };      // move: joystick vector (Task 8), wins over the keys while non-zero
@@ -227,7 +225,7 @@ function teardownRound() {
   bufs.clear(); sunk.clear(); pend.clear(); airborne.clear(); unknown.clear();
   outOrder.length = later.length = watches.length = 0;
   me = null; cur = null; fellSent = false; sync = ''; away = false; others = [];
-  nextStAt = 0; sent.length = skipped.length = 0;
+  nextStAt = 0;
   for (const k in cdUntil) cdUntil[k] = 0;
   ret.x = ret.z = 0;
 }
@@ -369,26 +367,13 @@ function onKnock(d) {
   else if (d.a === 'dash' || d.a === 'bump') fx.stars(me.x, .7, me.z, 4, .6);
 }
 
-// The server refused our state: take its body. A fix that only repeats a position we sent ourselves a moment ago
-// answers a st that reached the server in the same tick as the one before (its distance limit is then 0.5 m, about
-// what a dash or a big knock covers in 50 ms); the st sent since are checked again and pass, so applying such a stale
-// fix would only yank us back. At most two are skipped per second.
+// The server refused our state (or we rejoined): take its body.
 function onFix(d) {
   if (!me || me.falling || myMode() !== 'alive') return;
   if (!['x', 'z', 'y', 'vx', 'vz', 'vy'].every(k => Number.isFinite(d[k]))) return;
-  if (!sync && staleFix(d)) return;
   Object.assign(me, { x: d.x, z: d.z, y: d.y, vx: d.vx, vz: d.vz, vy: d.vy });
-  sent.length = 0;
   if (sync === 'any') sync = '';
   away = false;
-}
-function staleFix(d) {
-  const now = performance.now();
-  while (skipped.length && now - skipped[0] > 1000) skipped.shift();
-  if (skipped.length >= 2) return false; // keeps getting refused: give in
-  if (!sent.some(s => now - s[0] < 600 && Math.abs(s[1] - d.x) < .011 && Math.abs(s[2] - d.z) < .011)) return false;
-  skipped.push(now);
-  return true;
 }
 
 // ---- own actions ----
@@ -405,6 +390,7 @@ function doPush() {
   if (!canAct() || me.charging || now < cdUntil.push || !BK.startPush(me)) return;
   cdUntil.push = now + BK.CD.push * 1000;
   const q = ++seq;
+  sendSt(true);
   send({ t: 'act', a: 'push', q, c: 0 });
   fighters.punch(myId);
   let any = false;
@@ -428,6 +414,7 @@ function bonkRelease() {
   if (c < 0) return;
   cdUntil.bonk = performance.now() + BK.CD.bonk * 1000;
   const q = ++seq, cc = r2(c);
+  sendSt(true);
   send({ t: 'act', a: 'bonk', q, c: cc });
   cur = { a: 'bonk', q, c: cc, done: new Set() };
 }
@@ -437,6 +424,7 @@ function doDash() {
   if (!canAct() || now < cdUntil.dash || !BK.startDash(me)) return;
   cdUntil.dash = now + BK.CD.dash * 1000;
   const q = ++seq;
+  sendSt(true);
   send({ t: 'act', a: 'dash', q, c: 0 });
   cur = { a: 'dash', q, c: 0, done: new Set() };
   fx.dust(me.x, me.z, 6);
@@ -461,11 +449,13 @@ function strike() {
   if (!cur) return;
   const bonk = cur.a === 'bonk';
   if (bonk ? !(me.lunge > 0) : !(me.dash > 0)) { cur = null; return; }
+  let fresh = false;
   for (const o of others) {
     if (cur.done.has(o.id)) continue;
     if (bonk ? !BK.bonkTouch(me, o) : Math.hypot(o.x - me.x, o.z - me.z) > DASH_HIT) continue;
     cur.done.add(o.id);
     const [dx, dz] = BK.hitDir(me, o);
+    if (!fresh) { sendSt(true); fresh = true; } // the server measures reach from our last st
     send({ t: 'hit', id: o.id, a: cur.a, q: cur.q, c: cur.c, dx: r2(dx), dz: r2(dz) });
     if (bonk) {
       me.lunge = Math.min(me.lunge, BK.BONK.hitLungeT); me.vx *= BK.BONK.hitSlow; me.vz *= BK.BONK.hitSlow; // no lunging on into the sea
@@ -495,15 +485,14 @@ function stepMe(dt) {
   }
 }
 
-function sendSt(fl) {
+// force: right now, whatever the cadence. The server checks an act against our last st (stun) and a hit's reach
+// from it, so each act and each frame's hits go out right behind a fresh st.
+function sendSt(force) {
   if (ended || me.falling) return;
   const now = performance.now();
-  if (now < nextStAt) return;
-  nextStAt = Math.max(nextStAt + ST_MS, now + ST_MS / 2); // keeps the 20 Hz phase; after a pause (hidden tab) no catching up
-  const o = { t: 'st', x: r2(me.x), z: r2(me.z), y: r2(me.y), vx: r2(me.vx), vz: r2(me.vz), vy: r2(me.vy), f: r2(me.f), fl, ch: me.charging ? r2(me.charge) : 0 };
-  send(o);
-  sent.push([now, o.x, o.z]);
-  while (sent.length && now - sent[0][0] > 1000) sent.shift();
+  if (!force && now < nextStAt) return;
+  nextStAt = force ? now + ST_MS : Math.max(nextStAt + ST_MS, now + ST_MS / 2); // keeps the 20 Hz phase; after a pause (hidden tab) no catching up
+  send({ t: 'st', x: r2(me.x), z: r2(me.z), y: r2(me.y), vx: r2(me.vx), vz: r2(me.vz), vy: r2(me.vy), f: r2(me.f), fl: flOf(me), ch: me.charging ? r2(me.charge) : 0 });
 }
 
 // ---- frame ----
@@ -561,7 +550,7 @@ function frame(dt, t) {
     else {
       if (!me.falling) { ax += me.x; az += me.z; an++; }
       bodyDust(myId, me.x, me.z, me.y, fl);
-      if (!sync) sendSt(fl);
+      if (!sync) sendSt(false);
     }
   } else if (mine) fighters.set(myId, null, ddt, t);
   for (const [id, p] of pend) if ((p.t -= dt) <= 0 && p.ok) seat(id);
