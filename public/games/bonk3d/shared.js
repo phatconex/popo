@@ -119,12 +119,15 @@
     b.vx = dx * k.power + b.vx * .2; b.vz = dz * k.power + b.vz * .2; b.vy = Math.max(b.vy, k.vy); b.y = Math.max(b.y, .001);
     b.stun = Math.max(b.stun, k.stun); b.charging = false; b.charge = 0; b.lunge = 0; b.dash = 0;
   }
+  // Overlapping bodies (height within .7 m) part by half the overlap each (spec §3.4). Only b moves here: every body
+  // is moved by its own client, which does the other half.
   function separate(b, others) {
     for (const o of others) {
       if (o === b || Math.abs(b.y - o.y) > .7) continue;
       const dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz), m = BODY_R * 2;
       if (d >= m || d === 0) continue;
-      b.x = o.x + dx / d * m; b.z = o.z + dz / d * m;
+      const k = (m - d) / 2 / d;
+      b.x += dx * k; b.z += dz * k;
     }
   }
 

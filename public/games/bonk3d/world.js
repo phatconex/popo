@@ -38,8 +38,10 @@ export const THEMES = {
 };
 const WARN = new THREE.Color('#ff4d5e');
 // Models Hide & Seek also retints with brighten(): retint them here too so both games show them the same way
-// whichever loads first. Every nature/ model must be brightened (see core3d/assets.js).
+// whichever loads first. Every nature/ model must be brightened (see core3d/assets.js) — except the lily pad, which
+// Hide & Seek shows untinted: Bonk tones its own copies of the lily's materials (toneLily) and leaves the cache alone.
 const TONED = /^(nature|pirate|platformer)\/|^holiday\/(rocks-small|snow-pile)\.glb$/;
+const toneNature = c => c.offsetHSL(0, .1, 0).multiplyScalar(.3); // brighten()'s default for nature/ models
 
 function mulberry(seed) {
   return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -59,7 +61,6 @@ export async function buildWorld(round, quality) {
   const R = BK.islandRadius(rings);
 
   const paths = [...T.obst, ...T.decor, ...(T.islet ? T.islet.trees : []), ...(T.shore ? T.shore.trees : [])].map(m => m[0]);
-  if (T.lily) paths.push(T.lily);
   await Promise.all([...new Set(paths)].filter(p => TONED.test(p)).map(p => brighten(p)));
   const model = (m, opts) => (m[1] ? prop(m[0], m[1], opts) : fitted(m[0], m[2], opts));
 
@@ -183,10 +184,17 @@ export async function buildWorld(round, quality) {
       if (Math.abs(a - wa) < .3 || Math.abs(a - ma) < .3) continue;
       jobs.push(prop(m[0], m[1] * s, { shadow: false }).then(o => { o.position.set(Math.cos(a) * d, WATER_Y + .26, Math.sin(a) * d); o.rotation.y = ry; scene.add(o); }));
     }
+    const lilyMats = new Map(); // cached material -> our toned copy (disposed with the round)
+    const toneLily = o => o.traverse(m => {
+      if (!m.isMesh) return;
+      const tone = mt => { if (!lilyMats.has(mt)) { const c = keep(mt.clone()); if (c.color) toneNature(c.color); lilyMats.set(mt, c); } return lilyMats.get(mt); };
+      m.material = Array.isArray(m.material) ? m.material.map(tone) : tone(m.material);
+    });
     for (let i = 0; i < (mobile ? 9 : 14); i++) { // lily pads
       const f = { o: null, a: rnd() * TAU, d: R + 1.4 + rnd() * (L - R - 2.6), sp: (rnd() < .5 ? -1 : 1) * (.002 + rnd() * .004), ry: (rnd() - .5) * .1, y: .02, ph: rnd() * TAU };
       const s = .7 + rnd() * .5, ry = rnd() * TAU;
       jobs.push(fitted(T.lily, s, { shadow: false }).then(o => {
+        toneLily(o);
         o.children[0].position.y -= new THREE.Box3().setFromObject(o).min.y; // the model is centred on its origin: lift the pad onto the water
         o.rotation.y = ry; f.o = o; scene.add(o); floaters.push(f);
       }));

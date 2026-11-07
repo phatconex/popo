@@ -116,12 +116,14 @@ test('knockOf bump and applyKnock', () => {
   assert.ok(b.vy === 2 && b.y > 0 && b.stun === 0.3 && !b.charging && b.lunge === 0 && b.dash === 0);
 });
 
-test('separate pushes only b out of overlapping bodies at similar height', () => {
+test('separate moves only b, by half the overlap, away from bodies at similar height', () => {
   const b = BK.newBody(0, 0, 0), o = BK.newBody(0.4, 0, 0), hi = BK.newBody(0, 0.1, 0); hi.y = 2;
   BK.separate(b, [o, hi]);
-  assert.ok(Math.abs(b.x - (0.4 - 2 * BK.BODY_R)) < 1e-9);
+  assert.ok(Math.abs(b.x - -(2 * BK.BODY_R - 0.4) / 2) < 1e-9); // overlap 0.4 m: b moves 0.2 m away
   assert.strictEqual(o.x, 0.4);
   assert.strictEqual(b.z, 0);
+  BK.separate(o, [BK.newBody(0, 0, 0)]);                         // o's own client does the other half: just touching
+  assert.ok(Math.abs(o.x - b.x - 2 * BK.BODY_R) < 1e-9);
 });
 
 test('interp midpoint, clamps, angle wrap', () => {

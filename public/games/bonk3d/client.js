@@ -22,6 +22,8 @@ const GHOST_T = .9;  // splash -> seat on the ghost cloud
 const SNAP_ERR = .3; // clock error that is corrected at once instead of nudged
 const ST_MS = 50;    // own state goes out at 20 Hz on average, at most one per frame and never two within 25 ms
 const NUT_SLACK = .1;                  // s on top of the coconut cooldown: the server checks it on its own clock with no slack
+const CD_PAD = .08;                    // s on top of the push / bonk / dash cooldowns: the server checks them on its 20 Hz tick
+                                       // clock (±50 ms), so bunched packets after a delay spike are not refused
 const DASH_HIT = BK.BODY_R * 2 + .05;  // a dash hits whoever it overlaps
 const MEGA = .95;                      // bonk charge shown as MEGA BONK!
 const KEYS = { KeyJ: 'push', KeyK: 'bonk', Space: 'dash', KeyL: 'dash' };
@@ -98,6 +100,7 @@ export function unmount() {
 export function onMsg(d) {
   if (!d) return;
   if (d.t === 'round') {
+    if (finalRows || podium) return; // the match is over: the podium shows (or is coming), never the island again
     if (building ? d.rd === buildRd : world && d.rd === rd) { // the same round re-sent (rejoin): a fix follows
       if (!building) { syncClock(d.c, true); if (myMode() === 'alive' && !sync) sync = 'any'; }
       return;
@@ -156,7 +159,8 @@ function onKeyUp(e) {
   if (e.code === 'Space') e.preventDefault();
   if (e.code === 'KeyK') release('bonk');
 }
-function releaseAll() { keys.clear(); move.x = move.z = 0; release('bonk'); }
+// Focus lost (alt-tab, hidden tab): drop held keys and cancel a bonk charge without firing it (no act, no cooldown).
+function releaseAll() { keys.clear(); move.x = move.z = 0; if (me && me.charging) { me.charging = false; me.charge = 0; } }
 // A hidden tab gets no frames: the server takes over the body after 1 s. Coming back, wait for its word first.
 function onVisibility() {
   if (document.hidden) { releaseAll(); hiddenAt = performance.now(); }
@@ -292,7 +296,7 @@ function handle(d) {
     case 'fx': onFx(d); break;
     case 'knock': onKnock(d); break;
     case 'fix': onFix(d); break;
-    case 'roundEnd': for (const r of d.rows || []) kos.set(r.id, r.ko | 0); ended = true; onRoundEnd(d); break; // the server's counts win
+    case 'roundEnd': if (ended) break; for (const r of d.rows || []) kos.set(r.id, r.ko | 0); ended = true; onRoundEnd(d); break; // the server's counts win; once (rejoin re-sends it)
     case 'final': ended = true; finalRows = d.rows || []; break;
   }
 }
@@ -401,9 +405,9 @@ function hudFrame() {
   const st = status();
   hud.idle(st.mode === 'none');
   hud.ghost(st.mode === 'ghost' || st.mode === 'out');
-  hud.cooldown('push', st.push / BK.CD.push);
-  hud.cooldown('dash', st.dash / BK.CD.dash);
-  hud.cooldown('bonk', st.bonk / BK.CD.bonk);
+  hud.cooldown('push', st.push / (BK.CD.push + CD_PAD));
+  hud.cooldown('dash', st.dash / (BK.CD.dash + CD_PAD));
+  hud.cooldown('bonk', st.bonk / (BK.CD.bonk + CD_PAD));
   hud.cooldown('nut', st.nut / (BK.CD.nut + NUT_SLACK));
   hud.charge(st.charge);
   const rows = roster.map(r => ({ id: r.id, name: nameOf(r.id), color: ctx.app.colorOf(r.id), ko: kos.get(r.id) || 0, out: sunk.has(r.id) || outOrder.includes(r.id) }));
@@ -497,7 +501,7 @@ const canAct = () => !sync && !ended && clock >= 0 && myMode() === 'alive' && me
 function doPush() {
   const now = performance.now();
   if (!canAct() || me.charging || now < cdUntil.push || !BK.startPush(me)) return;
-  cdUntil.push = now + BK.CD.push * 1000;
+  cdUntil.push = now + (BK.CD.push + CD_PAD) * 1000;
   const q = ++seq;
   sendSt(true);
   send({ t: 'act', a: 'push', q, c: 0 });
@@ -522,7 +526,7 @@ function bonkRelease() {
   if (sync || ended || myMode() !== 'alive') { me.charging = false; me.charge = 0; return; }
   const c = BK.releaseBonk(me);
   if (c < 0) return;
-  cdUntil.bonk = performance.now() + BK.CD.bonk * 1000;
+  cdUntil.bonk = performance.now() + (BK.CD.bonk + CD_PAD) * 1000;
   const q = ++seq, cc = r2(c);
   sendSt(true);
   send({ t: 'act', a: 'bonk', q, c: cc });
@@ -533,7 +537,7 @@ function bonkRelease() {
 function doDash() {
   const now = performance.now();
   if (!canAct() || now < cdUntil.dash || !BK.startDash(me)) return;
-  cdUntil.dash = now + BK.CD.dash * 1000;
+  cdUntil.dash = now + (BK.CD.dash + CD_PAD) * 1000;
   const q = ++seq;
   sendSt(true);
   send({ t: 'act', a: 'dash', q, c: 0 });
@@ -656,10 +660,11 @@ function frame(dt, t) {
     if (!(fl & FL.FALL)) { ax += x; az += z; an++; others.push({ id, x, z, y, f }); if (y < .05) lastOn.set(id, [x, z]); }
     bodyDust(id, x, z, y, fl);
   }
-  // our own animal, simulated here (held still until the server's word after a new round or a hidden tab)
+  // our own animal, simulated here (held still until the server's word after a new round or a hidden tab, and once
+  // the round has ended: whoever the server called the winner does not slide into the sea afterwards)
   const mine = me && fighters.get(myId);
   if (mine && mine.state === 'alive') {
-    if (!sync) stepMe(ddt);
+    if (!sync && !ended) stepMe(ddt);
     const fl = flOf(me);
     fighters.set(myId, { x: me.x, z: me.z, y: me.y, f: me.f, fl, ch: me.charging ? me.charge : 0, ground: groundAt(me.x, me.z) >= 0 }, ddt, t);
     if (me.falling && me.y < BK.WATER_Y + .05) sink(myId);
