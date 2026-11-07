@@ -249,7 +249,7 @@ class Bonk {
   onSt(g, d) {
     if (g.out || g.body.falling || (this.phase !== 'count' && this.phase !== 'play')) return;
     if (!['x', 'z', 'y', 'vx', 'vz', 'vy', 'f'].every((k) => num(d[k]))) return;
-    const b = g.body, dt = g.simmed ? ST_DT : Math.max(0, this.t - g.lastSt);
+    const b = g.body, dt = g.simmed ? ST_DT : Math.max(ST_DT, this.t - g.lastSt);
     const limit = Math.max(10, Math.abs(g.knockV) || 0) * dt * 1.5 + .5;
     if (Math.hypot(d.x - b.x, d.z - b.z) > limit) { this.fix(g); return; }
     const fl = Number.isFinite(d.fl) ? Math.max(0, Math.min(63, d.fl | 0)) : 0;

@@ -82,6 +82,21 @@ test('a 5 m jump in one tick gets fix and is not applied', () => {
   assert.strictEqual(b.x, x0);
 });
 
+test('bunched st in one tick are accepted (dt floored at one tick); a 5 m jump still gets fix', () => {
+  const { api, g } = make(Bonk, 3);
+  tick(g, .05);
+  const b = g.gs.get(1).body, x0 = b.x, z0 = b.z;
+  g.gs.get(1).knockV = 10;
+  st(g, 1, { x: x0 + .45, z: z0 }); // same tick, back to back
+  st(g, 1, { x: x0 + .9, z: z0 });
+  st(g, 1, { x: x0 + 1.9, z: z0 }); // 1 m further: within one tick's 1.25 m
+  assert.strictEqual(api.sends[1], undefined, 'no fix');
+  assert.ok(Math.abs(b.x - (x0 + 1.9)) < 1e-9);
+  st(g, 1, { x: b.x + 5, z: z0 });
+  assert.strictEqual(api.sends[1].at(-1).t, 'fix');
+  assert.ok(Math.abs(b.x - (x0 + 1.9)) < 1e-9);
+});
+
 test('malformed st is ignored without throwing', () => {
   const { api, g } = make(Bonk, 3);
   tick(g, .05);
