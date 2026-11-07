@@ -97,6 +97,28 @@ test('bunched st in one tick are accepted (dt floored at one tick); a 5 m jump s
   assert.ok(Math.abs(b.x - (x0 + 1.9)) < 1e-9);
 });
 
+test('after a refused st, more st from the old far position are refused too; one at the fixed position is accepted', () => {
+  const { api, g } = make(Bonk, 3);
+  toPlay(g);
+  const b = g.gs.get(1).body, x0 = b.x, z0 = b.z;
+  st(g, 1, { x: x0, z: z0 });
+  tick(g, .05);
+  st(g, 1, { x: x0 + 1.9, z: z0 });           // 1.9 m in one tick: refused
+  assert.strictEqual(api.sends[1].length, 1);
+  assert.strictEqual(api.sends[1][0].t, 'fix');
+  tick(g, .05);                               // without the re-sync, dt 0.1 would let 1.9 m through (limit 2 m)
+  st(g, 1, { x: x0 + 1.9, z: z0 });           // still in flight from the old position
+  assert.strictEqual(api.sends[1].length, 2);
+  const fix = api.sends[1][1];
+  assert.strictEqual(fix.t, 'fix');
+  assert.ok(Math.abs(b.x - x0) < .01, 'body not flipped back');
+  tick(g, .05);
+  st(g, 1, { x: fix.x, z: fix.z });           // the client took the fix
+  assert.strictEqual(api.sends[1].length, 2, 'accepted, no third fix');
+  assert.strictEqual(b.x, fix.x);
+  assert.strictEqual(g.gs.get(1).simmed, false);
+});
+
 test('malformed st is ignored without throwing', () => {
   const { api, g } = make(Bonk, 3);
   tick(g, .05);
@@ -271,6 +293,19 @@ test('2 -> 1 players during play ends with []', () => {
   assert.strictEqual(api.ended.length, 1);
 });
 
+test('2 -> 1 players in the last round finishes the match on the current totals (never the leaver)', () => {
+  for (const when of ['count', 'play']) {
+    const { api, g } = make(Bonk, 2, { map: 'beach', rounds: '3' });
+    g.rd = 2; g.startRound();                 // the last round
+    g.gs.get(1).total = 6; g.gs.get(2).total = 10;
+    if (when === 'play') toPlay(g);
+    leave(api, g, 2);                         // the leader leaves
+    assert.deepStrictEqual(api.ended, [[1]], when);
+    tick(g, 20);
+    assert.strictEqual(api.ended.length, 1);
+  }
+});
+
 // FAST_T match: fresh module so BK_FAST is read at load.
 function loadFast() {
   const prev = process.env.BK_FAST, path = require.resolve('../server/games/bonk');
@@ -327,6 +362,44 @@ test('leaving in the final pause: 3 -> 2 keeps going, 2 -> 1 finishes with the w
   assert.strictEqual(api.ended.length, 1);
 });
 
+test('the top scorer leaving in the final pause stays the winner (broadcast standings), not the runner-up', () => {
+  const F = loadFast();
+  const { api, g } = make(F, 2, { map: 'beach', rounds: '3' });
+  playRounds(api, g, 3);                      // 2 wins every round: 15 to 9
+  assert.strictEqual(g.phase, 'final');
+  assert.deepStrictEqual(ofType(api, 'final')[0].rows.map(r => [r.id, r.total]), [[2, 15], [1, 9]]);
+  leave(api, g, 2);
+  assert.deepStrictEqual(api.ended, [[2]]);
+  // 3 players: the winner leaves, 2 stay and the final runs out: still the broadcast winner
+  const m = make(F, 3, { map: 'beach', rounds: '3' });
+  playRounds(m.api, m.g, 3);
+  leave(m.api, m.g, 3);
+  assert.strictEqual(m.api.ended.length, 0);
+  tick(m.g, 9);
+  assert.deepStrictEqual(m.api.ended, [[3]]);
+});
+
+test('rejoin in the pause or the final gets round, fix, then the round end (and final)', () => {
+  const F = loadFast();
+  const { api, g } = make(F, 2, { map: 'beach', rounds: '3' });
+  const p1 = api.players()[0];
+  playRounds(api, g, 1);
+  assert.strictEqual(g.phase, 'pause');
+  g.onDisconnect(p1); g.onRejoin(p1);
+  assert.deepStrictEqual(api.sends[1].map(d => d.t), ['round', 'fix', 'roundEnd']);
+  assert.deepStrictEqual(api.sends[1][2], ofType(api, 'roundEnd')[0]);
+  while (g.phase !== 'play') g.tick(.05);     // round 2 is on: round and fix only
+  api.sends[1] = [];
+  g.onDisconnect(p1); g.onRejoin(p1);
+  assert.deepStrictEqual(api.sends[1].map(d => [d.t, d.rd]), [['round', 2], ['fix', 2]]);
+  playRounds(api, g, 3);
+  assert.strictEqual(g.phase, 'final');
+  api.sends[1] = [];
+  g.onDisconnect(p1); g.onRejoin(p1);
+  assert.deepStrictEqual(api.sends[1].map(d => [d.t, d.rd]), [['round', 3], ['fix', 3], ['roundEnd', 3], ['final', 3]]);
+  assert.strictEqual(api.sends[1][2].last, true);
+});
+
 test('final with tied totals ends with all tied winners', () => {
   const F = loadFast();
   const { api, g } = make(F, 2, { map: 'beach', rounds: '3' });
@@ -377,7 +450,7 @@ test('hits are rejected without act, on cooldown, when far, stunned, falling, ou
   assert.strictEqual(knocks(api, 2).length, 0);
 
   ({ api, g } = duel());
-  put(g, 2, 3, 0); tick(g, .5); act(g, 1); hit(g, 1);       // 3 m away
+  put(g, 2, 3, 0); tick(g, .6); act(g, 1); hit(g, 1);       // 3 m away, and in reach only more than 0.5 s ago
   assert.strictEqual(knocks(api, 2).length, 0);
 
   ({ api, g } = duel());
@@ -402,6 +475,15 @@ test('hits are rejected without act, on cooldown, when far, stunned, falling, ou
   const k = knocks(api, 2);
   assert.strictEqual(k.length, 1);
   assert.ok(k[0].vx > 4.5 && Math.abs(k[0].vz) < .01);
+});
+
+test('lag compensation: the victim in reach 0.45 s ago is hit; in reach only more than 0.5 s ago is not', () => {
+  let { api, g } = duel();
+  put(g, 2, 3, 0); tick(g, .45); act(g, 1); hit(g, 1);      // 1 m away 0.45 s ago, 3 m away now
+  assert.strictEqual(knocks(api, 2).length, 1);
+  ({ api, g } = duel());
+  put(g, 2, 3, 0); tick(g, .55); act(g, 1); hit(g, 1);      // 1 m away 0.55 s ago: out of the kept history
+  assert.strictEqual(knocks(api, 2).length, 0);
 });
 
 test('bonk knock speed follows c and c is clamped to 0..1', () => {

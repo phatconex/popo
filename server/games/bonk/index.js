@@ -54,6 +54,8 @@ class Bonk {
     this.tiles = new Map();
     this.brk = new Map();
     this.roundMsg = null;
+    this.endMsgs = [];        // roundEnd (and final) of the round that just ended: resent on rejoin in the pause / final
+    this.finalRows = null;    // the broadcast final standings: they decide the winners
     this.nuts = [];           // coconuts in the air: { x, z, by, landAt (round clock) }
     this.pairAt = new Map();  // "lo:hi" -> t of the last bump knock of that pair
     this.groundAt = (x, z) => this.ground(x, z);
@@ -199,22 +201,28 @@ class Bonk {
     }
     const rows = [...this.gs.values()].sort((x, y) => x.place - y.place)
       .map((g) => ({ id: g.id, place: g.place, ko: g.ko, got: g.got, total: g.total }));
-    this.api.bcast({ t: 'roundEnd', rd: this.rd, rows, win: survivor ? survivor.id : null, last });
+    this.endMsgs = [{ t: 'roundEnd', rd: this.rd, rows, win: survivor ? survivor.id : null, last }];
+    if (last) {
+      this.finalRows = this.standings();
+      this.endMsgs.push({ t: 'final', rd: this.rd, rows: this.finalRows });
+    }
+    for (const m of this.endMsgs) this.api.bcast(m);
     if (!last) { this.phase = 'pause'; this.timer = TT.pause; return; }
-    this.api.bcast({ t: 'final', rd: this.rd, rows: this.finalRows() });
     this.phase = 'final'; this.timer = TT.final;
   }
 
-  finalRows() {
+  standings() {
     const sorted = [...this.gs.values()].sort((x, y) => y.total - x.total);
     return sorted.map((g) => ({ id: g.id, total: g.total, rank: 1 + sorted.filter((o) => o.total > g.total).length }));
   }
 
+  // Winners: the top total (> 0) of the broadcast final standings, so a winner who left during the final pause is not
+  // replaced by the runner-up (core skips ids no longer in the room); before those exist, the current totals.
   finish() {
     if (this.phase === 'done') return;
     this.phase = 'done';
-    const gs = [...this.gs.values()], top = Math.max(0, ...gs.map((g) => g.total));
-    this.api.end(top > 0 ? gs.filter((g) => g.total === top).map((g) => g.id) : []);
+    const rows = this.finalRows || [...this.gs.values()], top = Math.max(0, ...rows.map((r) => r.total));
+    this.api.end(top > 0 ? rows.filter((r) => r.total === top).map((r) => r.id) : []);
   }
 
   snapshot() {
@@ -251,7 +259,13 @@ class Bonk {
     if (!['x', 'z', 'y', 'vx', 'vz', 'vy', 'f'].every((k) => num(d[k]))) return;
     const b = g.body, dt = g.simmed ? ST_DT : Math.max(ST_DT, this.t - g.lastSt);
     const limit = Math.max(10, Math.abs(g.knockV) || 0) * dt * 1.5 + .5;
-    if (Math.hypot(d.x - b.x, d.z - b.z) > limit) { this.fix(g); return; }
+    if (Math.hypot(d.x - b.x, d.z - b.z) > limit) {
+      // re-synced: the server drives the body until an st near it arrives, so st still in flight from the old
+      // position are refused too (checked over one tick) instead of being let through by a growing dt
+      g.simmed = true;
+      this.fix(g);
+      return;
+    }
     const fl = Number.isFinite(d.fl) ? Math.max(0, Math.min(63, d.fl | 0)) : 0;
     const ch = Number.isFinite(d.ch) ? Math.max(0, Math.min(1, d.ch)) : 0;
     Object.assign(b, { x: d.x, z: d.z, y: d.y, vx: d.vx, vz: d.vz, vy: d.vy, f: d.f, stun: fl & 2 ? .3 : 0 });
@@ -278,7 +292,8 @@ class Bonk {
     if (g.hits.has(used)) return;
     const reach = BK.REACH[d.a] + REACH_SLACK, b = g.body;
     const near = (x, z) => Math.hypot(x - b.x, z - b.z) <= reach;
-    if (!(v.hist.some((h) => this.t - h[0] <= ACT_AGE && near(h[1], h[2])) || near(v.body.x, v.body.z))) return;
+    // reach: anywhere the victim stood in the kept history (HIST, lag compensation), or where it is now
+    if (!(v.hist.some((h) => this.t - h[0] <= HIST && near(h[1], h[2])) || near(v.body.x, v.body.z))) return;
     g.hits.add(used);
     let dx = num(d.dx) ? d.dx : 0, dz = num(d.dz) ? d.dz : 0, m = Math.hypot(dx, dz);
     if (m < 1e-6) { dx = v.body.x - b.x; dz = v.body.z - b.z; m = Math.hypot(dx, dz); }
@@ -371,6 +386,7 @@ class Bonk {
     g.online = true; g.lastSt = this.t; g.simmed = true; // the next st is checked against the server body
     this.api.send(p, { ...this.roundMsg, c: r2(this.c) });
     this.fix(g);
+    if (this.phase === 'pause' || this.phase === 'final') for (const m of this.endMsgs) this.api.send(p, m); // results, not a still island
   }
 
   onLeave(p) {
@@ -379,7 +395,7 @@ class Bonk {
     if ((this.phase === 'count' || this.phase === 'play') && !g.out) this.eliminate(g);
     this.gs.delete(g.id);
     if (this.gs.size >= 2) return;
-    if (this.phase === 'final') this.finish();
+    if (this.rd >= this.total) this.finish(); // the last round (any phase): the match counts
     else { this.phase = 'done'; this.api.end([]); }
   }
 }
