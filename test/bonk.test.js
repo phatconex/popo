@@ -323,3 +323,208 @@ test('final with tied totals ends with all tied winners', () => {
   tick(g, 3.5);
   assert.deepStrictEqual(api.ended[0].slice().sort(), [1, 2]);
 });
+
+// ---- Task 4: combat, bumps, coconuts -------------------------------------------------------------------
+const act = (g, id, o = {}) => g.onMsg({ id }, { t: 'act', rd: g.rd, a: 'push', q: 1, c: 0, ...o });
+const hit = (g, id, o = {}) => g.onMsg({ id }, { t: 'hit', rd: g.rd, id: 2, a: 'push', q: 1, c: 0, dx: 1, dz: 0, ...o });
+const knocks = (api, id) => (api.sends[id] || []).filter(d => d.t === 'knock');
+const speed = (k) => Math.hypot(k.vx, k.vz);
+// players 1 and 2 on the centre tile (1 m apart), both reporting st; play started
+function duel(n = 3) {
+  const { api, g } = make(Bonk, n);
+  toPlay(g);
+  for (let id = 1; id <= n; id++) put(g, id, id === 2 ? 1 : id === 1 ? 0 : 0, id <= 2 ? 0 : 0);
+  for (let id = 3; id <= n; id++) put(g, id, -1.5, 0);
+  tick(g, .05);
+  for (let id = 1; id <= n; id++) st(g, id, { x: g.gs.get(id).body.x, z: 0 });
+  return { api, g };
+}
+
+test('a plausible push is knocked back with server power and by; the same q only once', () => {
+  const { api, g } = duel();
+  act(g, 1); hit(g, 1); hit(g, 1);
+  const k = knocks(api, 2);
+  assert.strictEqual(k.length, 1);
+  assert.ok(Math.abs(speed(k[0]) - 4.6) < .01 && k[0].by === 1 && k[0].a === 'push' && k[0].rd === 1 && k[0].vy > 0 && k[0].stun > 0);
+  assert.ok(ofType(api, 'fx').some(f => f.a === 'push' && f.id === 1 && f.rd === 1));
+});
+
+test('hits are rejected without act, on cooldown, when far, stunned, falling, out, unknown or malformed', () => {
+  let { api, g } = duel();
+  hit(g, 1);                                   // no act
+  assert.strictEqual(knocks(api, 2).length, 0);
+  act(g, 1, { q: 1 }); hit(g, 1, { q: 2 });    // wrong q
+  hit(g, 1, { a: 'bonk' });                    // wrong kind
+  assert.strictEqual(knocks(api, 2).length, 0);
+  tick(g, .2); act(g, 1, { q: 2 }); hit(g, 1, { q: 2 }); // second push 0.2 s later: on cooldown
+  assert.strictEqual(knocks(api, 2).length, 0);
+  tick(g, .5); hit(g, 1, { q: 1 });            // act is too old
+  assert.strictEqual(knocks(api, 2).length, 0);
+
+  ({ api, g } = duel());
+  put(g, 2, 3, 0); tick(g, .5); act(g, 1); hit(g, 1);       // 3 m away
+  assert.strictEqual(knocks(api, 2).length, 0);
+
+  ({ api, g } = duel());
+  st(g, 1, { x: 0, fl: 2 }); act(g, 1); hit(g, 1);          // stunned attacker
+  assert.strictEqual(knocks(api, 2).length, 0);
+
+  ({ api, g } = duel());
+  act(g, 1); fall(g, 2); tick(g, .05); hit(g, 1);           // falling target
+  assert.strictEqual(knocks(api, 2).length, 0);
+  tick(g, .7); hit(g, 1);                                    // out target (same q: used or not, still no knock)
+  assert.strictEqual(knocks(api, 2).length, 0);
+
+  ({ api, g } = duel());
+  act(g, 1);
+  for (const o of [{ id: 99 }, { id: 'x' }, { id: null }, { id: 1 }, { q: 'a' }, { a: 5 }]) assert.doesNotThrow(() => hit(g, 1, o));
+  assert.strictEqual(knocks(api, 2).length, 0);
+
+  ({ api, g } = duel());
+  act(g, 1, { a: 'zap' }); act(g, 1, { q: NaN });
+  assert.strictEqual(ofType(api, 'fx').length, 0);
+  act(g, 1); hit(g, 1, { dx: NaN, dz: 0 });                  // falls back to attacker -> target (+x)
+  const k = knocks(api, 2);
+  assert.strictEqual(k.length, 1);
+  assert.ok(k[0].vx > 4.5 && Math.abs(k[0].vz) < .01);
+});
+
+test('bonk knock speed follows c and c is clamped to 0..1', () => {
+  let { api, g } = duel();
+  act(g, 1, { a: 'bonk' }); hit(g, 1, { a: 'bonk', c: 1 });
+  assert.ok(Math.abs(speed(knocks(api, 2)[0]) - 10) < .01);
+  ({ api, g } = duel());
+  act(g, 1, { a: 'bonk' }); hit(g, 1, { a: 'bonk', c: 5 });
+  assert.ok(Math.abs(speed(knocks(api, 2)[0]) - 10) < .01);
+  ({ api, g } = duel());
+  act(g, 1, { a: 'bonk' }); hit(g, 1, { a: 'bonk', c: -3 });
+  assert.ok(Math.abs(speed(knocks(api, 2)[0]) - 4.5) < .01);
+});
+
+test('KO credit: fall within 4 s credits the hitter; later or self-fall credits nobody', () => {
+  let { api, g } = duel();
+  act(g, 1); hit(g, 1); tick(g, 1); fall(g, 2); tick(g, .7);
+  assert.strictEqual(g.gs.get(1).ko, 1);
+  assert.strictEqual(ofType(api, 'out').at(-1).by, 1);
+
+  ({ api, g } = duel());
+  act(g, 1); hit(g, 1); tick(g, 4.2); fall(g, 2); tick(g, .7);
+  assert.strictEqual(g.gs.get(1).ko, 0);
+  assert.strictEqual(ofType(api, 'out').at(-1).by, 0);
+
+  ({ api, g } = duel());
+  fall(g, 2); tick(g, .7);
+  assert.strictEqual(g.gs.get(1).ko, 0);
+});
+
+test('an offline victim is moved by the hit on the server', () => {
+  const { api, g } = duel();
+  g.onDisconnect({ id: 2 });
+  act(g, 1); hit(g, 1);
+  assert.strictEqual(knocks(api, 2).length, 0);
+  const b = g.gs.get(2).body;
+  assert.ok(b.vx > 4 && b.stun > 0 && b.vy > 0);
+  const x0 = b.x; tick(g, .3);
+  assert.ok(b.x > x0 + .3);
+});
+
+test('a dash hit knocks like a body bump', () => {
+  const { api, g } = duel();
+  act(g, 1, { a: 'dash' }); hit(g, 1, { a: 'dash' });
+  assert.ok(Math.abs(speed(knocks(api, 2)[0]) - 4.5) < .01);
+});
+
+test('bump: a dashing body knocks a still one once per 0.3 s', () => {
+  const { api, g } = duel();
+  put(g, 2, .5, 0); put(g, 1, 0, 0);
+  st(g, 1, { x: 0, vx: 10, fl: 8 }); st(g, 2, { x: .5 });
+  tick(g, .05);
+  const k = knocks(api, 2);
+  assert.strictEqual(k.length, 1);
+  assert.ok(Math.abs(speed(k[0]) - 4.5) < .01 && k[0].by === 1);
+  tick(g, .1);
+  assert.strictEqual(knocks(api, 2).length, 1);
+  tick(g, .3);
+  assert.strictEqual(knocks(api, 2).length, 2);
+});
+
+test('bump: a flying stunned body credits its own hitter; slow contact does nothing', () => {
+  let { api, g } = duel(4);
+  put(g, 3, 1.8, 0); put(g, 2, 1, 0); tick(g, .05);
+  st(g, 3, { x: 1.8 }); st(g, 2, { x: 1 }); st(g, 1, { x: 0 });
+  act(g, 1); hit(g, 1);                       // 1 knocks 2 (credit 1)
+  put(g, 2, 1.3, 0);                          // 2 flies into 3, 0.5 m away
+  st(g, 2, { x: 1.3, vx: 8, y: .5, vy: 1, fl: 18 });
+  tick(g, .05);
+  assert.strictEqual(knocks(api, 3).length, 1);
+  assert.strictEqual(knocks(api, 3)[0].by, 1);
+
+  ({ api, g } = duel(3));
+  put(g, 2, .5, 0); st(g, 1, { x: 0, vx: 2, fl: 8 }); st(g, 2, { x: .5 });
+  tick(g, .05);
+  assert.strictEqual(knocks(api, 2).length, 0);
+});
+
+// A ghost: player 3 falls out. Others stand on the centre tile.
+function ghostGame() {
+  const { api, g } = duel(3);
+  fall(g, 3); tick(g, .7);
+  assert.ok(g.gs.get(3).out);
+  return { api, g };
+}
+const nut = (g, id, x, z) => g.onMsg({ id }, { t: 'nut', rd: g.rd, x, z });
+
+test('coconut: lands after ~1.13 s, knocks a body within 1.4 m, spares one farther, credits the ghost', () => {
+  const { api, g } = ghostGame();
+  put(g, 1, 0, 0); put(g, 2, 1, 0); st(g, 1, { x: 0 }); st(g, 2, { x: 1 });
+  nut(g, 3, -1, 0);
+  tick(g, .05);
+  assert.strictEqual(lastS(api).nuts.length, 1);
+  assert.ok(Math.abs(lastS(api).nuts[0][2] - g.c - 1.08) < .1);
+  tick(g, .9); st(g, 1, { x: 0 }); st(g, 2, { x: 1 }); tick(g, .1);
+  assert.strictEqual(knocks(api, 1).length, 0);
+  assert.strictEqual(ofType(api, 'fx').filter(f => f.a === 'thunk').length, 0);
+  tick(g, .2);
+  assert.strictEqual(ofType(api, 'fx').filter(f => f.a === 'thunk').length, 1);
+  assert.strictEqual(knocks(api, 1).length, 1);
+  assert.strictEqual(knocks(api, 2).length, 0);
+  const k = knocks(api, 1)[0];
+  assert.ok(Math.abs(speed(k) - 4.8) < .01 && k.vx > 0 && k.by === 3);
+  assert.strictEqual(lastS(api).nuts.length, 0);
+  fall(g, 1); tick(g, .7);
+  assert.strictEqual(g.gs.get(3).ko, 1);
+  assert.strictEqual(ofType(api, 'out').at(-1).by, 3);
+});
+
+test('coconut on water splashes and knocks nobody', () => {
+  const { api, g } = ghostGame();
+  const r = ofType(api, 'round').at(-1), R = BK.islandRadius(r.rings);
+  nut(g, 3, R + .5, 0);
+  tick(g, 1.3);
+  assert.strictEqual(ofType(api, 'fx').filter(f => f.a === 'splash').length, 1);
+  assert.strictEqual(knocks(api, 1).length + knocks(api, 2).length, 0);
+});
+
+test('coconut input rules: alive, cooldown, far or non-finite points are ignored', () => {
+  const { api, g } = ghostGame();
+  nut(g, 1, 1, 0);                               // alive player
+  assert.strictEqual(lastS(api).nuts.length, 0);
+  tick(g, .05); assert.strictEqual(lastS(api).nuts.length, 0);
+  for (const [x, z] of [[1e9, 0], [NaN, 0], ['a', 0], [Infinity, 0], [0, null]]) assert.doesNotThrow(() => nut(g, 3, x, z));
+  tick(g, .05); assert.strictEqual(lastS(api).nuts.length, 0);
+  nut(g, 3, 1, 0); tick(g, 1);
+  nut(g, 3, 1, 1); tick(g, .05);
+  assert.strictEqual(lastS(api).nuts.length, 1, 'second nut inside 3.5 s ignored');
+  tick(g, 2.6);
+  nut(g, 3, 1, 1); tick(g, .05);
+  assert.strictEqual(lastS(api).nuts.length, 1, 'accepted after the cooldown');
+});
+
+test('per-round combat state is reset', () => {
+  const { api, g } = duel();
+  act(g, 1); hit(g, 1);
+  const a = g.gs.get(1);
+  g.startRound();
+  assert.deepStrictEqual([Object.keys(a.acts).length, a.hits.size, a.lastHit, a.nutAt], [0, 0, null, -Infinity]);
+  assert.strictEqual(ofType(api, 'round').length, 2);
+});
